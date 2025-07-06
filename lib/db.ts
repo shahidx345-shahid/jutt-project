@@ -12,7 +12,8 @@ export const query = sql
 
 // Helper functions for safe data conversion
 export function safeNumber(value: any): number {
-  if (typeof value === "number") return value
+  if (value === null || value === undefined) return 0
+  if (typeof value === "number") return isNaN(value) ? 0 : value
   if (typeof value === "string") {
     const parsed = Number.parseFloat(value)
     return isNaN(parsed) ? 0 : parsed
@@ -21,7 +22,8 @@ export function safeNumber(value: any): number {
 }
 
 export function safeInteger(value: any): number {
-  if (typeof value === "number") return Math.floor(value)
+  if (value === null || value === undefined) return 0
+  if (typeof value === "number") return isNaN(value) ? 0 : Math.floor(value)
   if (typeof value === "string") {
     const parsed = Number.parseInt(value, 10)
     return isNaN(parsed) ? 0 : parsed
@@ -205,14 +207,28 @@ export async function getInvoices(userId: number) {
 
 export async function createInvoice(userId: number, invoice: any) {
   try {
+    console.log("Creating invoice for user:", userId)
+    console.log("Invoice data:", invoice)
+
     // Generate invoice number
-    const invoiceCount = await sql`
+    const invoiceCountResult = await sql`
       SELECT COUNT(*) as count FROM invoices WHERE user_id = ${userId}
     `
-    const count = safeInteger(invoiceCount[0]?.count || 0)
+    const count = safeInteger(invoiceCountResult[0]?.count || 0)
     const invoiceNumber = `INV-${String(count + 1).padStart(4, "0")}`
 
     console.log("Generated invoice number:", invoiceNumber)
+
+    // Validate customer exists
+    const customerCheck = await sql`
+      SELECT id FROM customers WHERE id = ${invoice.customer_id} AND user_id = ${userId}
+    `
+
+    if (customerCheck.length === 0) {
+      throw new Error(`Customer with ID ${invoice.customer_id} not found for user ${userId}`)
+    }
+
+    console.log("Customer validated:", customerCheck[0])
 
     const result = await sql`
       INSERT INTO invoices (
@@ -235,19 +251,37 @@ export async function createInvoice(userId: number, invoice: any) {
       RETURNING *
     `
 
-    console.log("Invoice created in database:", result[0])
+    console.log("Invoice created successfully:", result[0])
     return result[0]
   } catch (error) {
     console.error("Error creating invoice:", error)
+    console.error("Error details:", {
+      userId,
+      invoice,
+      error: error instanceof Error ? error.message : error,
+    })
     throw error
   }
 }
 
 export async function createInvoiceItems(invoiceId: number, items: any[]) {
   try {
-    console.log("Creating invoice items:", { invoiceId, items })
+    console.log("Creating invoice items for invoice:", invoiceId)
+    console.log("Items to create:", items)
 
-    for (const item of items) {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      console.log(`Creating item ${i + 1}:`, item)
+
+      // Validate product exists
+      const productCheck = await sql`
+        SELECT id FROM products WHERE id = ${item.product_id}
+      `
+
+      if (productCheck.length === 0) {
+        throw new Error(`Product with ID ${item.product_id} not found`)
+      }
+
       const result = await sql`
         INSERT INTO invoice_items (invoice_id, product_id, quantity, unit_price, total_price)
         VALUES (
@@ -259,10 +293,17 @@ export async function createInvoiceItems(invoiceId: number, items: any[]) {
         )
         RETURNING *
       `
-      console.log("Created invoice item:", result[0])
+      console.log(`Created invoice item ${i + 1}:`, result[0])
     }
+
+    console.log("All invoice items created successfully")
   } catch (error) {
     console.error("Error creating invoice items:", error)
+    console.error("Error details:", {
+      invoiceId,
+      items,
+      error: error instanceof Error ? error.message : error,
+    })
     throw error
   }
 }
