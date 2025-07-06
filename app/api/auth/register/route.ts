@@ -5,8 +5,7 @@ import { createUser, getUser } from "@/lib/db"
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { name, email, password } = body
+    const { name, email, password } = await request.json()
 
     // Validate input
     if (!name || !email || !password) {
@@ -24,17 +23,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12)
+    const saltRounds = 12
+    const passwordHash = await bcrypt.hash(password, saltRounds)
 
     // Create user
-    const user = await createUser(name, email, hashedPassword)
+    const user = await createUser(name, email, passwordHash)
 
     // Generate JWT token
-    const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_SECRET || "fallback-secret-key", {
+    const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_SECRET || "fallback-secret", {
       expiresIn: "7d",
     })
 
-    return NextResponse.json({
+    // Set cookie
+    const response = NextResponse.json({
       user: {
         id: user.id.toString(),
         name: user.name,
@@ -42,8 +43,17 @@ export async function POST(request: NextRequest) {
       },
       token,
     })
+
+    response.cookies.set("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+    })
+
+    return response
   } catch (error) {
     console.error("Registration error:", error)
-    return NextResponse.json({ error: "Failed to create account. Please try again." }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

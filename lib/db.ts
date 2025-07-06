@@ -65,7 +65,6 @@ export async function getProducts(userId: number) {
       WHERE user_id = ${userId}
       ORDER BY created_at DESC
     `
-    // Normalize data types
     return result.map((product) => ({
       ...product,
       price: safeNumber(product.price),
@@ -130,7 +129,6 @@ export async function getCustomers(userId: number) {
       GROUP BY c.id, c.name, c.email, c.phone, c.address, c.user_id, c.created_at, c.updated_at
       ORDER BY c.created_at DESC
     `
-    // Normalize data types
     return result.map((customer) => ({
       ...customer,
       invoice_count: safeInteger(customer.invoice_count),
@@ -192,7 +190,6 @@ export async function getInvoices(userId: number) {
       WHERE i.user_id = ${userId}
       ORDER BY i.created_at DESC
     `
-    // Normalize data types
     return result.map((invoice) => ({
       ...invoice,
       subtotal: safeNumber(invoice.subtotal),
@@ -208,7 +205,6 @@ export async function getInvoices(userId: number) {
 
 export async function createInvoice(userId: number, invoice: any) {
   try {
-    // Generate invoice number
     const invoiceCount = await sql`
       SELECT COUNT(*) as count FROM invoices WHERE user_id = ${userId}
     `

@@ -37,7 +37,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [mounted])
 
-  // Route protection
   useEffect(() => {
     if (!mounted || loading) return
 

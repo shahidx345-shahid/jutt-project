@@ -12,8 +12,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/components/auth-provider"
-import { safeNumber, safeInteger } from "@/lib/db"
 import { Plus, Trash2, ArrowLeft } from "lucide-react"
+
+// Helper functions for safe data conversion
+const safeNumber = (value: any): number => {
+  if (typeof value === "number") return value
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value)
+    return isNaN(parsed) ? 0 : parsed
+  }
+  return 0
+}
+
+const safeInteger = (value: any): number => {
+  if (typeof value === "number") return Math.floor(value)
+  if (typeof value === "string") {
+    const parsed = Number.parseInt(value, 10)
+    return isNaN(parsed) ? 0 : parsed
+  }
+  return 0
+}
 
 interface Product {
   id: number
@@ -80,7 +98,6 @@ export default function CreateInvoicePage() {
 
       if (productsRes.ok) {
         const productsData = await productsRes.json()
-        // Normalize product data
         const normalizedProducts = productsData.map((product: any) => ({
           ...product,
           price: safeNumber(product.price),
