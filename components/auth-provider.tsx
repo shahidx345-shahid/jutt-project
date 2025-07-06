@@ -1,10 +1,11 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { useRouter } from "next/navigation"
+import type React from "react"
+import { createContext, useContext, useState, useEffect } from "react"
+import { useRouter, usePathname } from "next/navigation"
 
 interface User {
-  id: number
+  id: string
   name: string
   email: string
 }
@@ -19,11 +20,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
     setMounted(true)
@@ -35,9 +37,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [mounted])
 
+  // Route protection
+  useEffect(() => {
+    if (!mounted || loading) return
+
+    const publicRoutes = ["/", "/login", "/register"]
+    const isPublicRoute = publicRoutes.includes(pathname)
+
+    if (!user && !isPublicRoute) {
+      router.push("/login")
+    } else if (user && (pathname === "/login" || pathname === "/register")) {
+      router.push("/dashboard")
+    }
+  }, [user, loading, pathname, router, mounted])
+
   const checkAuth = async () => {
     try {
-      const token = localStorage.getItem("token")
+      if (typeof window === "undefined") {
+        setLoading(false)
+        return
+      }
+
+      const token = localStorage.getItem("auth-token")
       if (!token) {
         setLoading(false)
         return
@@ -50,15 +71,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
 
       if (response.ok) {
-        const userData = await response.json()
-        setUser(userData)
+        const data = await response.json()
+        setUser(data.user)
       } else {
-        localStorage.removeItem("token")
+        localStorage.removeItem("auth-token")
         setUser(null)
       }
     } catch (error) {
-      console.error("Auth check error:", error)
-      localStorage.removeItem("token")
+      console.error("Auth check failed:", error)
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("auth-token")
+      }
       setUser(null)
     } finally {
       setLoading(false)
@@ -76,12 +99,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || "Login failed")
+        const data = await response.json()
+        throw new Error(data.error || "Login failed")
       }
 
       const data = await response.json()
-      localStorage.setItem("token", data.token)
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("auth-token", data.token)
+      }
+
       setUser(data.user)
       router.push("/dashboard")
     } catch (error) {
@@ -101,12 +128,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || "Registration failed")
+        const data = await response.json()
+        throw new Error(data.error || "Registration failed")
       }
 
       const data = await response.json()
-      localStorage.setItem("token", data.token)
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("auth-token", data.token)
+      }
+
       setUser(data.user)
       router.push("/dashboard")
     } catch (error) {
@@ -117,16 +148,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      })
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth-token") : null
+
+      if (token) {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+      }
     } catch (error) {
       console.error("Logout error:", error)
     } finally {
-      localStorage.removeItem("token")
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("auth-token")
+      }
       setUser(null)
       router.push("/login")
     }

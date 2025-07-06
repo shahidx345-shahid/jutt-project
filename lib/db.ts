@@ -4,8 +4,30 @@ if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL environment variable is not set")
 }
 
-export const sql = neon(process.env.DATABASE_URL)
+const sql = neon(process.env.DATABASE_URL)
+
+// Export both sql and query for compatibility
+export { sql }
 export const query = sql
+
+// Helper functions for safe data conversion
+export function safeNumber(value: any): number {
+  if (typeof value === "number") return value
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value)
+    return isNaN(parsed) ? 0 : parsed
+  }
+  return 0
+}
+
+export function safeInteger(value: any): number {
+  if (typeof value === "number") return Math.floor(value)
+  if (typeof value === "string") {
+    const parsed = Number.parseInt(value, 10)
+    return isNaN(parsed) ? 0 : parsed
+  }
+  return 0
+}
 
 // Database helper functions
 export async function getUser(email: string) {
@@ -38,11 +60,17 @@ export async function createUser(name: string, email: string, passwordHash: stri
 
 export async function getProducts(userId: number) {
   try {
-    return await sql`
+    const result = await sql`
       SELECT * FROM products 
       WHERE user_id = ${userId}
       ORDER BY created_at DESC
     `
+    // Normalize data types
+    return result.map((product) => ({
+      ...product,
+      price: safeNumber(product.price),
+      stock: safeInteger(product.stock),
+    }))
   } catch (error) {
     console.error("Error getting products:", error)
     throw error
@@ -53,7 +81,7 @@ export async function createProduct(userId: number, product: any) {
   try {
     const result = await sql`
       INSERT INTO products (user_id, name, sku, description, price, stock, category)
-      VALUES (${userId}, ${product.name}, ${product.sku}, ${product.description || ""}, ${product.price}, ${product.stock}, ${product.category})
+      VALUES (${userId}, ${product.name}, ${product.sku}, ${product.description || ""}, ${safeNumber(product.price)}, ${safeInteger(product.stock)}, ${product.category})
       RETURNING *
     `
     return result[0]
@@ -68,7 +96,7 @@ export async function updateProduct(productId: number, userId: number, product: 
     const result = await sql`
       UPDATE products 
       SET name = ${product.name}, sku = ${product.sku}, description = ${product.description || ""}, 
-          price = ${product.price}, stock = ${product.stock}, category = ${product.category},
+          price = ${safeNumber(product.price)}, stock = ${safeInteger(product.stock)}, category = ${product.category},
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ${productId} AND user_id = ${userId}
       RETURNING *
@@ -102,7 +130,11 @@ export async function getCustomers(userId: number) {
       GROUP BY c.id, c.name, c.email, c.phone, c.address, c.user_id, c.created_at, c.updated_at
       ORDER BY c.created_at DESC
     `
-    return result
+    // Normalize data types
+    return result.map((customer) => ({
+      ...customer,
+      invoice_count: safeInteger(customer.invoice_count),
+    }))
   } catch (error) {
     console.error("Error getting customers:", error)
     throw error
@@ -153,13 +185,21 @@ export async function deleteCustomer(customerId: number, userId: number) {
 
 export async function getInvoices(userId: number) {
   try {
-    return await sql`
+    const result = await sql`
       SELECT i.*, c.name as customer_name
       FROM invoices i
       JOIN customers c ON i.customer_id = c.id
       WHERE i.user_id = ${userId}
       ORDER BY i.created_at DESC
     `
+    // Normalize data types
+    return result.map((invoice) => ({
+      ...invoice,
+      subtotal: safeNumber(invoice.subtotal),
+      tax_rate: safeNumber(invoice.tax_rate),
+      tax_amount: safeNumber(invoice.tax_amount),
+      total_amount: safeNumber(invoice.total_amount),
+    }))
   } catch (error) {
     console.error("Error getting invoices:", error)
     throw error
@@ -175,8 +215,6 @@ export async function createInvoice(userId: number, invoice: any) {
     const count = invoiceCount[0]?.count || 0
     const invoiceNumber = `INV-${String(Number(count) + 1).padStart(4, "0")}`
 
-    console.log("Generated invoice number:", invoiceNumber)
-
     const result = await sql`
       INSERT INTO invoices (
         user_id, customer_id, invoice_number, issue_date, due_date, 
@@ -184,13 +222,12 @@ export async function createInvoice(userId: number, invoice: any) {
       )
       VALUES (
         ${userId}, ${invoice.customer_id}, ${invoiceNumber}, ${invoice.issue_date}, 
-        ${invoice.due_date}, ${invoice.subtotal}, ${invoice.tax_rate}, 
-        ${invoice.tax_amount}, ${invoice.total_amount}, ${invoice.status}, ${invoice.notes}
+        ${invoice.due_date}, ${safeNumber(invoice.subtotal)}, ${safeNumber(invoice.tax_rate)}, 
+        ${safeNumber(invoice.tax_amount)}, ${safeNumber(invoice.total_amount)}, ${invoice.status}, ${invoice.notes}
       )
       RETURNING *
     `
 
-    console.log("Invoice created successfully:", result[0])
     return result[0]
   } catch (error) {
     console.error("Error creating invoice:", error)
@@ -200,16 +237,12 @@ export async function createInvoice(userId: number, invoice: any) {
 
 export async function createInvoiceItems(invoiceId: number, items: any[]) {
   try {
-    console.log("Creating invoice items for invoice:", invoiceId, "Items:", items)
-
     for (const item of items) {
       await sql`
         INSERT INTO invoice_items (invoice_id, product_id, quantity, unit_price, total_price)
-        VALUES (${invoiceId}, ${item.product_id}, ${item.quantity}, ${item.unit_price}, ${item.total_price})
+        VALUES (${invoiceId}, ${item.product_id}, ${safeInteger(item.quantity)}, ${safeNumber(item.unit_price)}, ${safeNumber(item.total_price)})
       `
     }
-
-    console.log("Invoice items created successfully")
   } catch (error) {
     console.error("Error creating invoice items:", error)
     throw error

@@ -5,9 +5,9 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { useAuth } from "@/components/auth-provider"
-import { LayoutDashboard, Package, Users, FileText, Menu, X, LogOut, Rocket } from "lucide-react"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { LayoutDashboard, Package, Users, FileText, LogOut, Menu, X, Rocket } from "lucide-react"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -17,11 +17,11 @@ const navigation = [
 ]
 
 export function DashboardSidebar() {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const pathname = usePathname()
   const { user, logout } = useAuth()
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
-  // Close mobile menu when pathname changes
+  // Close mobile menu when route changes
   useEffect(() => {
     setIsMobileMenuOpen(false)
   }, [pathname])
@@ -43,50 +43,44 @@ export function DashboardSidebar() {
     try {
       await logout()
     } catch (error) {
-      console.error("Logout error:", error)
+      console.error("Logout failed:", error)
     }
   }
 
   return (
     <>
-      {/* Mobile Header Bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-background/80 backdrop-blur-md border-b border-border">
+      {/* Mobile Header */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b">
         <div className="flex items-center justify-between px-4 py-3">
-          {/* Logo */}
-          <Link href="/dashboard" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <Rocket className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-bold text-lg bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              SolarInvoice
-            </span>
-          </Link>
-
           {/* Mobile Menu Button */}
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="relative w-10 h-10 p-0 hover:bg-accent/50 transition-colors"
-            aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+            className="p-2"
+            aria-label="Toggle mobile menu"
           >
-            <div className="relative w-6 h-6">
-              <Menu
-                className={`absolute inset-0 w-6 h-6 transition-all duration-200 ${
-                  isMobileMenuOpen ? "rotate-90 opacity-0" : "rotate-0 opacity-100"
-                }`}
-              />
-              <X
-                className={`absolute inset-0 w-6 h-6 transition-all duration-200 ${
-                  isMobileMenuOpen ? "rotate-0 opacity-100" : "-rotate-90 opacity-0"
-                }`}
-              />
+            <div className={`transition-transform duration-200 ${isMobileMenuOpen ? "rotate-180" : ""}`}>
+              {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </div>
           </Button>
+
+          {/* Logo */}
+          <div className="flex items-center space-x-2">
+            <Rocket className="h-6 w-6 text-primary" />
+            <span className="font-bold text-lg bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+              Solar Invoice
+            </span>
+          </div>
+
+          {/* User Avatar */}
+          <Avatar className="h-8 w-8">
+            <AvatarFallback className="text-xs">{user?.name?.charAt(0)?.toUpperCase() || "U"}</AvatarFallback>
+          </Avatar>
         </div>
       </div>
 
-      {/* Mobile Backdrop */}
+      {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div
           className="md:hidden fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
@@ -96,113 +90,113 @@ export function DashboardSidebar() {
 
       {/* Mobile Sidebar */}
       <div
-        className={`
-        md:hidden fixed top-0 left-0 z-50 h-full w-[85%] max-w-sm bg-background border-r border-border
-        transform transition-transform duration-300 ease-out
-        ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}
-      `}
+        className={`md:hidden fixed top-0 left-0 z-50 h-full w-[85%] max-w-sm bg-background border-r transform transition-transform duration-300 ease-out ${
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
       >
         <div className="flex flex-col h-full">
           {/* Mobile Header */}
-          <div className="flex items-center justify-between p-4 border-b border-border">
-            <Link href="/dashboard" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <Rocket className="w-5 h-5 text-white" />
-              </div>
-              <span className="font-bold text-lg bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                SolarInvoice
+          <div className="flex items-center justify-between p-4 border-b">
+            <div className="flex items-center space-x-2">
+              <Rocket className="h-6 w-6 text-primary" />
+              <span className="font-bold text-lg bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                Solar Invoice
               </span>
-            </Link>
-            <Button variant="ghost" size="sm" onClick={() => setIsMobileMenuOpen(false)} className="w-8 h-8 p-0">
-              <X className="w-5 h-5" />
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setIsMobileMenuOpen(false)} className="p-2">
+              <X className="h-5 w-5" />
             </Button>
           </div>
 
-          {/* Mobile Navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-2">
-            {navigation.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`
-                    flex items-center px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200
-                    ${
-                      isActive
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                    }
-                  `}
-                >
-                  <item.icon className="mr-3 h-5 w-5" />
-                  {item.name}
-                </Link>
-              )
-            })}
-          </nav>
-
-          {/* Mobile User Section */}
-          <div className="p-4 border-t border-border space-y-4">
+          {/* User Info */}
+          <div className="p-4 border-b">
             <div className="flex items-center space-x-3">
-              <Avatar className="h-10 w-10">
-                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                  {user?.name?.charAt(0)?.toUpperCase() || "U"}
-                </AvatarFallback>
+              <Avatar>
+                <AvatarFallback>{user?.name?.charAt(0)?.toUpperCase() || "U"}</AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{user?.name || "User"}</p>
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               </div>
             </div>
+          </div>
 
+          {/* Navigation */}
+          <nav className="flex-1 p-4 space-y-2">
+            {navigation.map((item) => {
+              const isActive = pathname === item.href
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <item.icon className="h-5 w-5" />
+                  <span>{item.name}</span>
+                </Link>
+              )
+            })}
+          </nav>
+
+          {/* Footer */}
+          <div className="p-4 border-t space-y-2">
             <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Theme</span>
               <ThemeToggle />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLogout}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </Button>
             </div>
+            <Button
+              variant="ghost"
+              onClick={handleLogout}
+              className="w-full justify-start text-muted-foreground hover:text-foreground"
+            >
+              <LogOut className="h-4 w-4 mr-3" />
+              Sign out
+            </Button>
           </div>
         </div>
       </div>
 
       {/* Desktop Sidebar */}
-      <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 bg-background border-r border-border">
-        <div className="flex flex-col flex-grow pt-5 pb-4 overflow-y-auto">
-          {/* Desktop Header */}
-          <div className="flex items-center flex-shrink-0 px-4 mb-8">
-            <Link href="/dashboard" className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                <Rocket className="w-6 h-6 text-white" />
-              </div>
-              <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                SolarInvoice
-              </span>
-            </Link>
+      <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
+        <div className="flex flex-col flex-grow pt-5 bg-background border-r overflow-y-auto">
+          {/* Logo */}
+          <div className="flex items-center flex-shrink-0 px-4">
+            <Rocket className="h-8 w-8 text-primary" />
+            <span className="ml-2 text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+              Solar Invoice
+            </span>
           </div>
 
-          {/* Desktop Navigation */}
-          <nav className="mt-5 flex-1 px-4 space-y-2">
+          {/* User Info */}
+          <div className="mt-8 px-4">
+            <div className="flex items-center space-x-3 p-3 rounded-lg bg-muted/50">
+              <Avatar>
+                <AvatarFallback>{user?.name?.charAt(0)?.toUpperCase() || "U"}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{user?.name || "User"}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Navigation */}
+          <nav className="mt-8 flex-1 px-4 space-y-2">
             {navigation.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+              const isActive = pathname === item.href
               return (
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`
-                    group flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200
-                    ${
-                      isActive
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                    }
-                  `}
+                  className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    isActive
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
                 >
                   <item.icon className="mr-3 h-5 w-5" />
                   {item.name}
@@ -211,32 +205,20 @@ export function DashboardSidebar() {
             })}
           </nav>
 
-          {/* Desktop User Section */}
-          <div className="flex-shrink-0 px-4 py-4 border-t border-border">
-            <div className="flex items-center space-x-3 mb-4">
-              <Avatar className="h-10 w-10">
-                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                  {user?.name?.charAt(0)?.toUpperCase() || "U"}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.name || "User"}</p>
-                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
-              </div>
-            </div>
-
+          {/* Footer */}
+          <div className="flex-shrink-0 p-4 space-y-4">
             <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Theme</span>
               <ThemeToggle />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLogout}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </Button>
             </div>
+            <Button
+              variant="ghost"
+              onClick={handleLogout}
+              className="w-full justify-start text-muted-foreground hover:text-foreground"
+            >
+              <LogOut className="h-4 w-4 mr-3" />
+              Sign out
+            </Button>
           </div>
         </div>
       </div>

@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server"
 
 export async function POST() {
-  const response = NextResponse.json({ success: true })
-
-  response.cookies.set("token", "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 0,
-  })
-
-  return response
+  try {
+    // For JWT tokens, logout is handled client-side by removing the token
+    // This endpoint exists for consistency and future server-side session management
+    return NextResponse.json({ message: "Logged out successfully" })
+  } catch (error) {
+    console.error("Logout error:", error)
+    return NextResponse.json({ error: "Logout failed" }, { status: 500 })
+  }
 }
