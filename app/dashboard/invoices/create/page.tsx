@@ -44,6 +44,26 @@ type InvoiceItem = {
   total_price: number
 }
 
+// Helper function to safely convert to number
+const safeNumber = (value: any): number => {
+  if (typeof value === "number") return value
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value)
+    return isNaN(parsed) ? 0 : parsed
+  }
+  return 0
+}
+
+// Helper function to safely convert to integer
+const safeInteger = (value: any): number => {
+  if (typeof value === "number") return Math.floor(value)
+  if (typeof value === "string") {
+    const parsed = Number.parseInt(value, 10)
+    return isNaN(parsed) ? 0 : parsed
+  }
+  return 0
+}
+
 export default function CreateInvoicePage() {
   const router = useRouter()
   const { toast } = useToast()
@@ -77,14 +97,26 @@ export default function CreateInvoicePage() {
 
       if (customersRes.ok) {
         const customersData = await customersRes.json()
-        setCustomers(customersData)
+        // Normalize customer data
+        const normalizedCustomers = customersData.map((customer: any) => ({
+          ...customer,
+          id: safeInteger(customer.id),
+        }))
+        setCustomers(normalizedCustomers)
       } else {
         throw new Error("Failed to fetch customers")
       }
 
       if (productsRes.ok) {
         const productsData = await productsRes.json()
-        setProducts(productsData)
+        // Normalize product data - ensure price and stock are numbers
+        const normalizedProducts = productsData.map((product: any) => ({
+          ...product,
+          id: safeInteger(product.id),
+          price: safeNumber(product.price),
+          stock: safeInteger(product.stock),
+        }))
+        setProducts(normalizedProducts)
       } else {
         throw new Error("Failed to fetch products")
       }
@@ -110,7 +142,7 @@ export default function CreateInvoicePage() {
       return
     }
 
-    const product = products.find((p) => p.id === Number.parseInt(selectedProduct))
+    const product = products.find((p) => p.id === safeInteger(selectedProduct))
     if (!product) {
       toast({
         title: "Product not found",
@@ -141,14 +173,15 @@ export default function CreateInvoicePage() {
       return
     }
 
+    const unitPrice = safeNumber(product.price)
     const newItem: InvoiceItem = {
       id: Date.now().toString(),
       product_id: product.id,
       name: product.name,
       sku: product.sku,
       quantity: quantity,
-      unit_price: product.price,
-      total_price: product.price * quantity,
+      unit_price: unitPrice,
+      total_price: unitPrice * quantity,
     }
 
     setInvoiceItems([...invoiceItems, newItem])
@@ -199,11 +232,11 @@ export default function CreateInvoicePage() {
   }
 
   const calculateSubtotal = () => {
-    return invoiceItems.reduce((sum, item) => sum + item.total_price, 0)
+    return invoiceItems.reduce((sum, item) => sum + safeNumber(item.total_price), 0)
   }
 
   const calculateTax = () => {
-    return (calculateSubtotal() * taxRate) / 100
+    return (calculateSubtotal() * safeNumber(taxRate)) / 100
   }
 
   const calculateTotal = () => {
@@ -263,11 +296,11 @@ export default function CreateInvoicePage() {
 
     try {
       const invoiceData = {
-        customer_id: Number.parseInt(selectedCustomer),
+        customer_id: safeInteger(selectedCustomer),
         issue_date: new Date().toISOString().split("T")[0],
         due_date: dueDate,
         subtotal: calculateSubtotal(),
-        tax_rate: taxRate,
+        tax_rate: safeNumber(taxRate),
         tax_amount: calculateTax(),
         total_amount: calculateTotal(),
         status: "pending",
@@ -277,8 +310,8 @@ export default function CreateInvoicePage() {
       const items = invoiceItems.map((item) => ({
         product_id: item.product_id,
         quantity: item.quantity,
-        unit_price: item.unit_price,
-        total_price: item.total_price,
+        unit_price: safeNumber(item.unit_price),
+        total_price: safeNumber(item.total_price),
       }))
 
       console.log("Submitting invoice:", { invoice: invoiceData, items })
@@ -317,8 +350,8 @@ export default function CreateInvoicePage() {
     }
   }
 
-  const selectedCustomerData = customers.find((c) => c.id === Number.parseInt(selectedCustomer))
-  const selectedProductData = products.find((p) => p.id === Number.parseInt(selectedProduct))
+  const selectedCustomerData = customers.find((c) => c.id === safeInteger(selectedCustomer))
+  const selectedProductData = products.find((p) => p.id === safeInteger(selectedProduct))
 
   if (loading) {
     return (
@@ -501,7 +534,7 @@ export default function CreateInvoicePage() {
                                 </span>
                               </div>
                               <Badge variant="outline" className="ml-2">
-                                ${product.price.toFixed(2)}
+                                ${safeNumber(product.price).toFixed(2)}
                               </Badge>
                             </div>
                           </SelectItem>
@@ -520,7 +553,7 @@ export default function CreateInvoicePage() {
                       min="1"
                       max={selectedProductData?.stock || 999}
                       value={quantity}
-                      onChange={(e) => setQuantity(Number.parseInt(e.target.value) || 1)}
+                      onChange={(e) => setQuantity(safeInteger(e.target.value) || 1)}
                       className="glass-effect"
                     />
                   </div>
@@ -568,15 +601,15 @@ export default function CreateInvoicePage() {
                                 type="number"
                                 min="1"
                                 value={item.quantity}
-                                onChange={(e) => updateItemQuantity(item.id, Number.parseInt(e.target.value) || 1)}
+                                onChange={(e) => updateItemQuantity(item.id, safeInteger(e.target.value) || 1)}
                                 className="w-20 h-8 text-right"
                               />
                             </TableCell>
                             <TableCell className="text-right text-cosmic-green font-semibold">
-                              ${item.unit_price.toFixed(2)}
+                              ${safeNumber(item.unit_price).toFixed(2)}
                             </TableCell>
                             <TableCell className="text-right text-cosmic-blue font-semibold">
-                              ${item.total_price.toFixed(2)}
+                              ${safeNumber(item.total_price).toFixed(2)}
                             </TableCell>
                             <TableCell>
                               <Button
@@ -621,7 +654,7 @@ export default function CreateInvoicePage() {
                             max="100"
                             step="0.1"
                             value={taxRate}
-                            onChange={(e) => setTaxRate(Number.parseFloat(e.target.value) || 0)}
+                            onChange={(e) => setTaxRate(safeNumber(e.target.value) || 0)}
                             className="w-20 h-8 text-xs glass-effect"
                           />
                           <span className="text-xs">%</span>
