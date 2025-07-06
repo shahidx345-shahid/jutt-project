@@ -24,41 +24,52 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User>(null)
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
   const { toast } = useToast()
 
+  // Handle mounting
   useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+
     // Check if user is logged in by checking for stored user data
     const checkAuth = async () => {
       try {
         const storedUser = localStorage.getItem("user")
         if (storedUser) {
-          setUser(JSON.parse(storedUser))
+          const userData = JSON.parse(storedUser)
+          setUser(userData)
         }
       } catch (error) {
         console.error("Authentication error:", error)
+        // Clear invalid data
+        localStorage.removeItem("user")
       } finally {
         setLoading(false)
       }
     }
 
     checkAuth()
-  }, [])
+  }, [mounted])
 
-  // Protect routes
+  // Protect routes - only run after mounting and loading is complete
   useEffect(() => {
-    if (!loading) {
-      const publicRoutes = ["/", "/login", "/register", "/demo"]
-      const isPublicRoute = publicRoutes.some((route) => pathname === route)
+    if (!mounted || loading) return
 
-      if (!user && !isPublicRoute) {
-        router.push("/login")
-      } else if (user && (pathname === "/login" || pathname === "/register")) {
-        router.push("/dashboard")
-      }
+    const publicRoutes = ["/", "/login", "/register", "/demo"]
+    const isPublicRoute = publicRoutes.some((route) => pathname === route)
+
+    if (!user && !isPublicRoute) {
+      router.push("/login")
+    } else if (user && (pathname === "/login" || pathname === "/register")) {
+      router.push("/dashboard")
     }
-  }, [user, loading, pathname, router])
+  }, [user, loading, pathname, router, mounted])
 
   const login = async (email: string, password: string) => {
     setLoading(true)
@@ -148,6 +159,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("user")
     setUser(null)
     router.push("/")
+  }
+
+  // Don't render children until mounted to prevent hydration issues
+  if (!mounted) {
+    return null
   }
 
   return <AuthContext.Provider value={{ user, login, register, logout, loading }}>{children}</AuthContext.Provider>

@@ -6,17 +6,22 @@ import { useTheme } from "next-themes"
 
 export function PlanetAnimation() {
   const [mounted, setMounted] = useState(false)
-  const { theme } = useTheme()
-  const isDark =
-    theme === "dark" ||
-    (!mounted && typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches)
+  const { theme, resolvedTheme } = useTheme()
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  if (!mounted) return null
+  if (!mounted) {
+    return (
+      <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
+        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500" />
+      </div>
+    )
+  }
+
+  const isDark = theme === "dark" || resolvedTheme === "dark"
 
   return (
     <div ref={containerRef} className="relative w-full h-full flex items-center justify-center overflow-hidden">
@@ -60,12 +65,9 @@ export function PlanetAnimation() {
 
       {/* Mercury Orbit */}
       <motion.div
-        className="absolute w-32 h-32 rounded-full"
-        style={{ borderStyle: "dashed" }}
-        animate={{
-          borderColor: isDark ? "rgba(200, 200, 200, 0.1)" : "rgba(0, 0, 0, 0.1)",
-          rotate: 360,
-        }}
+        className="absolute w-32 h-32 rounded-full border border-dashed"
+        style={{ borderColor: isDark ? "rgba(200, 200, 200, 0.1)" : "rgba(0, 0, 0, 0.1)" }}
+        animate={{ rotate: 360 }}
         transition={{
           duration: 10,
           repeat: Number.POSITIVE_INFINITY,
@@ -87,12 +89,9 @@ export function PlanetAnimation() {
 
       {/* Venus Orbit */}
       <motion.div
-        className="absolute w-48 h-48 rounded-full"
-        style={{ borderStyle: "dashed" }}
-        animate={{
-          borderColor: isDark ? "rgba(200, 200, 200, 0.1)" : "rgba(0, 0, 0, 0.1)",
-          rotate: 360,
-        }}
+        className="absolute w-48 h-48 rounded-full border border-dashed"
+        style={{ borderColor: isDark ? "rgba(200, 200, 200, 0.1)" : "rgba(0, 0, 0, 0.1)" }}
+        animate={{ rotate: 360 }}
         transition={{
           duration: 15,
           repeat: Number.POSITIVE_INFINITY,
@@ -114,12 +113,9 @@ export function PlanetAnimation() {
 
       {/* Earth Orbit */}
       <motion.div
-        className="absolute w-64 h-64 rounded-full"
-        style={{ borderStyle: "dashed" }}
-        animate={{
-          borderColor: isDark ? "rgba(200, 200, 200, 0.1)" : "rgba(0, 0, 0, 0.1)",
-          rotate: 360,
-        }}
+        className="absolute w-64 h-64 rounded-full border border-dashed"
+        style={{ borderColor: isDark ? "rgba(200, 200, 200, 0.1)" : "rgba(0, 0, 0, 0.1)" }}
+        animate={{ rotate: 360 }}
         transition={{
           duration: 20,
           repeat: Number.POSITIVE_INFINITY,
@@ -162,12 +158,9 @@ export function PlanetAnimation() {
 
       {/* Mars Orbit */}
       <motion.div
-        className="absolute w-80 h-80 rounded-full"
-        style={{ borderStyle: "dashed" }}
-        animate={{
-          borderColor: isDark ? "rgba(200, 200, 200, 0.1)" : "rgba(0, 0, 0, 0.1)",
-          rotate: 360,
-        }}
+        className="absolute w-80 h-80 rounded-full border border-dashed"
+        style={{ borderColor: isDark ? "rgba(200, 200, 200, 0.1)" : "rgba(0, 0, 0, 0.1)" }}
+        animate={{ rotate: 360 }}
         transition={{
           duration: 30,
           repeat: Number.POSITIVE_INFINITY,
@@ -189,12 +182,9 @@ export function PlanetAnimation() {
 
       {/* Jupiter Orbit */}
       <motion.div
-        className="absolute w-96 h-96 rounded-full"
-        style={{ borderStyle: "dashed" }}
-        animate={{
-          borderColor: isDark ? "rgba(200, 200, 200, 0.1)" : "rgba(0, 0, 0, 0.1)",
-          rotate: 360,
-        }}
+        className="absolute w-96 h-96 rounded-full border border-dashed"
+        style={{ borderColor: isDark ? "rgba(200, 200, 200, 0.1)" : "rgba(0, 0, 0, 0.1)" }}
+        animate={{ rotate: 360 }}
         transition={{
           duration: 40,
           repeat: Number.POSITIVE_INFINITY,
@@ -261,18 +251,14 @@ export function PlanetAnimation() {
       </motion.div>
 
       {/* Shooting stars */}
-      <ShootingStar delay={2} top="10%" left="20%" />
-      <ShootingStar delay={5} top="30%" left="70%" />
-      <ShootingStar delay={8} top="60%" left="40%" />
+      <ShootingStar delay={2} top="10%" left="20%" isDark={isDark} />
+      <ShootingStar delay={5} top="30%" left="70%" isDark={isDark} />
+      <ShootingStar delay={8} top="60%" left="40%" isDark={isDark} />
     </div>
   )
 }
 
-function ShootingStar({ delay, top, left }: { delay: number; top: string; left: string }) {
-  const { theme } = useTheme()
-  const isDark =
-    theme === "dark" || (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches)
-
+function ShootingStar({ delay, top, left, isDark }: { delay: number; top: string; left: string; isDark: boolean }) {
   return (
     <motion.div
       className="absolute h-px w-20"

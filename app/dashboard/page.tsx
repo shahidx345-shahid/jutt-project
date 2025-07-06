@@ -44,16 +44,12 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const [greeting, setGreeting] = useState("")
   const [mounted, setMounted] = useState(false)
-  const { theme } = useTheme()
+  const { theme, resolvedTheme } = useTheme()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([])
-
-  const isDark =
-    theme === "dark" ||
-    (!mounted && typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches)
 
   useEffect(() => {
     setMounted(true)
@@ -65,8 +61,10 @@ export default function DashboardPage() {
 
   // Fetch all data
   useEffect(() => {
-    fetchDashboardData()
-  }, [])
+    if (mounted) {
+      fetchDashboardData()
+    }
+  }, [mounted])
 
   const fetchDashboardData = async () => {
     try {
@@ -149,6 +147,21 @@ export default function DashboardPage() {
     show: { opacity: 1, y: 0 },
   }
 
+  if (!mounted) {
+    return (
+      <div className="p-4 sm:p-6">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 bg-muted rounded w-1/3"></div>
+          <div className="grid gap-4 md:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-24 bg-muted rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="p-4 sm:p-6">
@@ -167,6 +180,8 @@ export default function DashboardPage() {
       </div>
     )
   }
+
+  const isDark = theme === "dark" || resolvedTheme === "dark"
 
   return (
     <div className="p-4 sm:p-6">
@@ -284,7 +299,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="h-[300px] flex items-center justify-center">
-                {mounted && <RevenueChart isDark={isDark} data={monthlyData} />}
+                <RevenueChart isDark={isDark} data={monthlyData} />
               </div>
             </CardContent>
           </Card>

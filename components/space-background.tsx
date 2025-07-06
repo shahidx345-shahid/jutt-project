@@ -7,13 +7,15 @@ import { useTheme } from "next-themes"
 export function SpaceBackground() {
   const [stars, setStars] = useState<{ x: number; y: number; size: number; opacity: number; delay: number }[]>([])
   const [mounted, setMounted] = useState(false)
-  const { theme } = useTheme()
-  const isDark =
-    theme === "dark" ||
-    (!mounted && typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches)
+  const { theme, resolvedTheme } = useTheme()
 
   useEffect(() => {
     setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+
     const generateStars = () => {
       const newStars = []
       for (let i = 0; i < 150; i++) {
@@ -37,7 +39,13 @@ export function SpaceBackground() {
 
     window.addEventListener("resize", handleResize)
     return () => window.removeEventListener("resize", handleResize)
-  }, [])
+  }, [mounted])
+
+  if (!mounted) {
+    return <div className="fixed inset-0 bg-background" />
+  }
+
+  const isDark = theme === "dark" || resolvedTheme === "dark"
 
   return (
     <motion.div
