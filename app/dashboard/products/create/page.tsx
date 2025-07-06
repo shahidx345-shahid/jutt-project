@@ -32,8 +32,8 @@ export default function CreateProductPage() {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSelectChange = (name: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }))
+  const handleSelectChange = (value: string) => {
+    setFormData((prev) => ({ ...prev, category: value }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -46,18 +46,29 @@ export default function CreateProductPage() {
         throw new Error("Please fill in all required fields")
       }
 
+      const price = Number.parseFloat(formData.price)
+      const stock = Number.parseInt(formData.stock)
+
+      if (isNaN(price) || price < 0) {
+        throw new Error("Please enter a valid price")
+      }
+
+      if (isNaN(stock) || stock < 0) {
+        throw new Error("Please enter a valid stock quantity")
+      }
+
       const response = await fetch("/api/products", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: formData.name,
-          sku: formData.sku,
+          name: formData.name.trim(),
+          sku: formData.sku.trim().toUpperCase(),
           category: formData.category,
-          price: Number.parseFloat(formData.price),
-          stock: Number.parseInt(formData.stock),
-          description: formData.description,
+          price: price,
+          stock: stock,
+          description: formData.description.trim(),
         }),
       })
 
@@ -67,12 +78,13 @@ export default function CreateProductPage() {
       }
 
       toast({
-        title: "Product created",
+        title: "Product created successfully!",
         description: `${formData.name} has been added to your products.`,
       })
 
       router.push("/dashboard/products")
     } catch (error) {
+      console.error("Product creation error:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create product",
@@ -151,7 +163,7 @@ export default function CreateProductPage() {
                   <Label htmlFor="category" className="text-sm font-medium">
                     Category *
                   </Label>
-                  <Select value={formData.category} onValueChange={(value) => handleSelectChange("category", value)}>
+                  <Select value={formData.category} onValueChange={handleSelectChange} required>
                     <SelectTrigger id="category" className="glass-effect">
                       <SelectValue placeholder="Select a category" />
                     </SelectTrigger>
@@ -164,6 +176,40 @@ export default function CreateProductPage() {
                       <SelectItem value="Accessories">Accessories</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="price" className="text-sm font-medium flex items-center gap-1">
+                    <DollarSign className="h-3 w-3" />
+                    Price ($) *
+                  </Label>
+                  <Input
+                    id="price"
+                    name="price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={formData.price}
+                    onChange={handleChange}
+                    required
+                    className="glass-effect"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="stock" className="text-sm font-medium">
+                    Stock Quantity *
+                  </Label>
+                  <Input
+                    id="stock"
+                    name="stock"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={formData.stock}
+                    onChange={handleChange}
+                    required
+                    className="glass-effect"
+                  />
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="description" className="text-sm font-medium">
@@ -181,68 +227,6 @@ export default function CreateProductPage() {
               </CardContent>
             </Card>
 
-            {/* Pricing */}
-            <Card className="glass-effect hover-lift">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="h-5 w-5 text-cosmic-green" />
-                  Pricing
-                </CardTitle>
-                <CardDescription>Set the price for your product</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="price" className="text-sm font-medium">
-                    Price ($) *
-                  </Label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="price"
-                      name="price"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0.00"
-                      value={formData.price}
-                      onChange={handleChange}
-                      required
-                      className="pl-10 glass-effect"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Inventory */}
-            <Card className="glass-effect hover-lift">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5 text-cosmic-orange" />
-                  Inventory
-                </CardTitle>
-                <CardDescription>Manage your product stock</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="stock" className="text-sm font-medium">
-                    Stock Quantity *
-                  </Label>
-                  <Input
-                    id="stock"
-                    name="stock"
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={formData.stock}
-                    onChange={handleChange}
-                    required
-                    className="glass-effect"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Actions */}
             <Card className="glass-effect lg:col-span-2">
               <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6">
@@ -251,6 +235,7 @@ export default function CreateProductPage() {
                   type="button"
                   onClick={() => router.push("/dashboard/products")}
                   className="w-full sm:w-auto"
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </Button>

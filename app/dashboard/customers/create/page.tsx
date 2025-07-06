@@ -39,12 +39,23 @@ export default function CreateCustomerPage() {
         throw new Error("Please fill in all required fields")
       }
 
+      // Basic email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(formData.email)) {
+        throw new Error("Please enter a valid email address")
+      }
+
       const response = await fetch("/api/customers", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          email: formData.email.trim().toLowerCase(),
+          phone: formData.phone.trim(),
+          address: formData.address.trim(),
+        }),
       })
 
       if (!response.ok) {
@@ -53,12 +64,13 @@ export default function CreateCustomerPage() {
       }
 
       toast({
-        title: "Customer created",
+        title: "Customer created successfully!",
         description: `${formData.name} has been added to your customers.`,
       })
 
       router.push("/dashboard/customers")
     } catch (error) {
+      console.error("Customer creation error:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create customer",
@@ -174,6 +186,7 @@ export default function CreateCustomerPage() {
                   type="button"
                   onClick={() => router.push("/dashboard/customers")}
                   className="w-full sm:w-auto"
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </Button>

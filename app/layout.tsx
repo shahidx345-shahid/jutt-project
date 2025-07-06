@@ -6,7 +6,6 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
 import { SpaceBackground } from "@/components/space-background"
 import { AuthProvider } from "@/components/auth-provider"
-import { DataProvider } from "@/components/data-provider"
 import { PageTransition } from "@/components/page-transition"
 import { ThemeToggle } from "@/components/theme-toggle"
 
@@ -28,16 +27,14 @@ export default function RootLayout({
       <body className={`${inter.className} overflow-x-hidden`}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <AuthProvider>
-            <DataProvider>
-              <SpaceBackground />
-              <div className="fixed top-4 right-4 z-50">
-                <ThemeToggle />
-              </div>
-              <main className="relative z-10">
-                <PageTransition>{children}</PageTransition>
-              </main>
-              <Toaster />
-            </DataProvider>
+            <SpaceBackground />
+            <div className="fixed top-4 right-4 z-50">
+              <ThemeToggle />
+            </div>
+            <main className="relative z-10">
+              <PageTransition>{children}</PageTransition>
+            </main>
+            <Toaster />
           </AuthProvider>
         </ThemeProvider>
       </body>

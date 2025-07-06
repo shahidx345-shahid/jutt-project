@@ -3,7 +3,6 @@
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import { useToast } from "@/components/ui/use-toast"
 
 type User = {
   id: string
@@ -27,7 +26,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
-  const { toast } = useToast()
 
   // Handle mounting
   useEffect(() => {
@@ -40,15 +38,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Check if user is logged in by checking for stored user data
     const checkAuth = async () => {
       try {
-        const storedUser = localStorage.getItem("user")
-        if (storedUser) {
-          const userData = JSON.parse(storedUser)
-          setUser(userData)
+        if (typeof window !== "undefined") {
+          const storedUser = localStorage.getItem("user")
+          if (storedUser) {
+            const userData = JSON.parse(storedUser)
+            setUser(userData)
+          }
         }
       } catch (error) {
         console.error("Authentication error:", error)
         // Clear invalid data
-        localStorage.removeItem("user")
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("user")
+        }
       } finally {
         setLoading(false)
       }
@@ -88,22 +90,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(data.error || "Login failed")
       }
 
-      localStorage.setItem("user", JSON.stringify(data.user))
+      if (typeof window !== "undefined") {
+        localStorage.setItem("user", JSON.stringify(data.user))
+      }
       setUser(data.user)
-
-      toast({
-        title: "Login successful",
-        description: "Welcome back to Cosmic Invoicer!",
-      })
 
       router.push("/dashboard")
     } catch (error) {
       console.error("Login error:", error)
-      toast({
-        title: "Login failed",
-        description: error instanceof Error ? error.message : "Invalid credentials",
-        variant: "destructive",
-      })
       throw error
     } finally {
       setLoading(false)
@@ -127,22 +121,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(data.error || "Registration failed")
       }
 
-      localStorage.setItem("user", JSON.stringify(data.user))
+      if (typeof window !== "undefined") {
+        localStorage.setItem("user", JSON.stringify(data.user))
+      }
       setUser(data.user)
-
-      toast({
-        title: "Registration successful",
-        description: "Welcome to Cosmic Invoicer!",
-      })
 
       router.push("/dashboard")
     } catch (error) {
       console.error("Registration error:", error)
-      toast({
-        title: "Registration failed",
-        description: error instanceof Error ? error.message : "Failed to create account",
-        variant: "destructive",
-      })
       throw error
     } finally {
       setLoading(false)
@@ -156,14 +142,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("Logout error:", error)
     }
 
-    localStorage.removeItem("user")
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("user")
+    }
     setUser(null)
     router.push("/")
   }
 
   // Don't render children until mounted to prevent hydration issues
   if (!mounted) {
-    return null
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
   }
 
   return <AuthContext.Provider value={{ user, login, register, logout, loading }}>{children}</AuthContext.Provider>
