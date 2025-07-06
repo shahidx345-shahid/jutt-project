@@ -26,7 +26,7 @@ type Invoice = {
   customer_id: number
   issue_date: string
   due_date: string
-  total_amount: number
+  total_amount: string | number
   status: "pending" | "paid" | "overdue"
   created_at: string
 }
@@ -51,7 +51,15 @@ export default function InvoicesPage() {
       const response = await fetch("/api/invoices")
       if (response.ok) {
         const data = await response.json()
-        setInvoices(data)
+        // Ensure total_amount is a number
+        const normalizedData = data.map((invoice: any) => ({
+          ...invoice,
+          total_amount:
+            typeof invoice.total_amount === "string" ? Number.parseFloat(invoice.total_amount) : invoice.total_amount,
+        }))
+        setInvoices(normalizedData)
+      } else {
+        throw new Error("Failed to fetch invoices")
       }
     } catch (error) {
       console.error("Error fetching invoices:", error)
@@ -77,11 +85,19 @@ export default function InvoicesPage() {
     if (!sortConfig) return 0
 
     const key = sortConfig.key as keyof typeof a
+    let aVal = a[key]
+    let bVal = b[key]
 
-    if (a[key] < b[key]) {
+    // Convert to numbers for total_amount
+    if (key === "total_amount") {
+      aVal = typeof aVal === "string" ? Number.parseFloat(aVal as string) : aVal
+      bVal = typeof bVal === "string" ? Number.parseFloat(bVal as string) : bVal
+    }
+
+    if (aVal < bVal) {
       return sortConfig.direction === "ascending" ? -1 : 1
     }
-    if (a[key] > b[key]) {
+    if (aVal > bVal) {
       return sortConfig.direction === "ascending" ? 1 : -1
     }
     return 0
@@ -137,7 +153,11 @@ export default function InvoicesPage() {
 
   // Calculate stats
   const totalInvoices = invoices.length
-  const totalAmount = invoices.reduce((sum, invoice) => sum + invoice.total_amount, 0)
+  const totalAmount = invoices.reduce((sum, invoice) => {
+    const amount =
+      typeof invoice.total_amount === "string" ? Number.parseFloat(invoice.total_amount) : invoice.total_amount
+    return sum + amount
+  }, 0)
   const paidInvoices = invoices.filter((invoice) => invoice.status === "paid").length
   const pendingInvoices = invoices.filter((invoice) => invoice.status === "pending").length
 
@@ -328,65 +348,74 @@ export default function InvoicesPage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      sortedInvoices.map((invoice, index) => (
-                        <motion.tr
-                          key={invoice.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -20 }}
-                          transition={{ duration: 0.3, delay: index * 0.05 }}
-                          className="border-border/50 hover:bg-muted/50 transition-colors"
-                        >
-                          <TableCell className="font-medium">
-                            <Badge variant="outline" className="font-mono">
-                              {invoice.invoice_number}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-medium">{invoice.customer_name}</TableCell>
-                          <TableCell className="text-sm">{new Date(invoice.issue_date).toLocaleDateString()}</TableCell>
-                          <TableCell>
-                            <Badge className={getStatusColor(invoice.status)}>
-                              {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-cosmic-green">
-                            ${invoice.total_amount.toFixed(2)}
-                          </TableCell>
-                          <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-cosmic-purple/10">
-                                  <span className="sr-only">Open menu</span>
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="glass-effect">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem className="hover:bg-cosmic-blue/10">
-                                  <Link href={`/dashboard/invoices/${invoice.id}`} className="flex items-center">
-                                    <Eye className="mr-2 h-4 w-4" />
-                                    View
-                                  </Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="hover:bg-cosmic-green/10">
-                                  <Link href={`/dashboard/invoices/${invoice.id}/edit`} className="flex items-center">
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Edit
-                                  </Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-destructive focus:text-destructive hover:bg-cosmic-red/10"
-                                  onClick={() => handleDeleteInvoice(invoice.id)}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </motion.tr>
-                      ))
+                      sortedInvoices.map((invoice, index) => {
+                        const totalAmount =
+                          typeof invoice.total_amount === "string"
+                            ? Number.parseFloat(invoice.total_amount)
+                            : invoice.total_amount
+
+                        return (
+                          <motion.tr
+                            key={invoice.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            transition={{ duration: 0.3, delay: index * 0.05 }}
+                            className="border-border/50 hover:bg-muted/50 transition-colors"
+                          >
+                            <TableCell className="font-medium">
+                              <Badge variant="outline" className="font-mono">
+                                {invoice.invoice_number}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="font-medium">{invoice.customer_name}</TableCell>
+                            <TableCell className="text-sm">
+                              {new Date(invoice.issue_date).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={getStatusColor(invoice.status)}>
+                                {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-semibold text-cosmic-green">
+                              ${totalAmount.toFixed(2)}
+                            </TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-cosmic-purple/10">
+                                    <span className="sr-only">Open menu</span>
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="glass-effect">
+                                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                  <DropdownMenuItem className="hover:bg-cosmic-blue/10">
+                                    <Link href={`/dashboard/invoices/${invoice.id}`} className="flex items-center">
+                                      <Eye className="mr-2 h-4 w-4" />
+                                      View
+                                    </Link>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="hover:bg-cosmic-green/10">
+                                    <Link href={`/dashboard/invoices/${invoice.id}/edit`} className="flex items-center">
+                                      <Edit className="mr-2 h-4 w-4" />
+                                      Edit
+                                    </Link>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive hover:bg-cosmic-red/10"
+                                    onClick={() => handleDeleteInvoice(invoice.id)}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </motion.tr>
+                        )
+                      })
                     )}
                   </AnimatePresence>
                 </TableBody>

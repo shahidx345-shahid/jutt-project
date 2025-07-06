@@ -15,7 +15,7 @@ type Invoice = {
   id: number
   invoice_number: string
   customer_name: string
-  total_amount: number
+  total_amount: string | number
   status: string
   issue_date: string
   created_at: string
@@ -24,8 +24,8 @@ type Invoice = {
 type Product = {
   id: number
   name: string
-  price: number
-  stock: number
+  price: string | number
+  stock: string | number
 }
 
 type Customer = {
@@ -76,13 +76,25 @@ export default function DashboardPage() {
 
       if (invoicesRes.ok) {
         const invoicesData = await invoicesRes.json()
-        setInvoices(invoicesData)
-        generateMonthlyData(invoicesData)
+        // Normalize invoice data
+        const normalizedInvoices = invoicesData.map((invoice: any) => ({
+          ...invoice,
+          total_amount:
+            typeof invoice.total_amount === "string" ? Number.parseFloat(invoice.total_amount) : invoice.total_amount,
+        }))
+        setInvoices(normalizedInvoices)
+        generateMonthlyData(normalizedInvoices)
       }
 
       if (productsRes.ok) {
         const productsData = await productsRes.json()
-        setProducts(productsData)
+        // Normalize product data
+        const normalizedProducts = productsData.map((product: any) => ({
+          ...product,
+          price: typeof product.price === "string" ? Number.parseFloat(product.price) : product.price,
+          stock: typeof product.stock === "string" ? Number.parseInt(product.stock) : product.stock,
+        }))
+        setProducts(normalizedProducts)
       }
 
       if (customersRes.ok) {
@@ -115,7 +127,10 @@ export default function DashboardPage() {
 
       months.push({
         month: monthNames[date.getMonth()],
-        revenue: monthInvoices.reduce((sum, inv) => sum + inv.total_amount, 0),
+        revenue: monthInvoices.reduce((sum, inv) => {
+          const amount = typeof inv.total_amount === "string" ? Number.parseFloat(inv.total_amount) : inv.total_amount
+          return sum + amount
+        }, 0),
         invoices: monthInvoices.length,
       })
     }
@@ -123,8 +138,12 @@ export default function DashboardPage() {
     setMonthlyData(months)
   }
 
-  // Calculate statistics
-  const totalRevenue = invoices.reduce((sum, invoice) => sum + invoice.total_amount, 0)
+  // Calculate statistics - ensure proper number handling
+  const totalRevenue = invoices.reduce((sum, invoice) => {
+    const amount =
+      typeof invoice.total_amount === "string" ? Number.parseFloat(invoice.total_amount) : invoice.total_amount
+    return sum + amount
+  }, 0)
   const totalProducts = products.length
   const totalCustomers = customers.length
   const totalInvoices = invoices.length
@@ -319,17 +338,23 @@ export default function DashboardPage() {
             <CardContent>
               <div className="space-y-4">
                 {recentInvoices.length > 0 ? (
-                  recentInvoices.map((invoice, index) => (
-                    <ActivityItem
-                      key={invoice.id}
-                      icon={<FileText className="h-4 w-4" />}
-                      color="blue"
-                      title={`Invoice ${invoice.invoice_number}`}
-                      description={`${invoice.customer_name} - $${invoice.total_amount.toFixed(2)}`}
-                      time={new Date(invoice.created_at).toLocaleDateString()}
-                      delay={index * 0.1}
-                    />
-                  ))
+                  recentInvoices.map((invoice, index) => {
+                    const amount =
+                      typeof invoice.total_amount === "string"
+                        ? Number.parseFloat(invoice.total_amount)
+                        : invoice.total_amount
+                    return (
+                      <ActivityItem
+                        key={invoice.id}
+                        icon={<FileText className="h-4 w-4" />}
+                        color="blue"
+                        title={`Invoice ${invoice.invoice_number}`}
+                        description={`${invoice.customer_name} - $${amount.toFixed(2)}`}
+                        time={new Date(invoice.created_at).toLocaleDateString()}
+                        delay={index * 0.1}
+                      />
+                    )
+                  })
                 ) : (
                   <div className="text-center py-8">
                     <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />

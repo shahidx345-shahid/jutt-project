@@ -25,7 +25,7 @@ type Customer = {
   email: string
   phone: string
   address?: string
-  invoice_count: number
+  invoice_count: string | number
 }
 
 export default function CustomersPage() {
@@ -48,7 +48,17 @@ export default function CustomersPage() {
       const response = await fetch("/api/customers")
       if (response.ok) {
         const data = await response.json()
-        setCustomers(data)
+        // Ensure invoice_count is a number
+        const normalizedData = data.map((customer: any) => ({
+          ...customer,
+          invoice_count:
+            typeof customer.invoice_count === "string"
+              ? Number.parseInt(customer.invoice_count)
+              : customer.invoice_count,
+        }))
+        setCustomers(normalizedData)
+      } else {
+        throw new Error("Failed to fetch customers")
       }
     } catch (error) {
       console.error("Error fetching customers:", error)
@@ -75,11 +85,19 @@ export default function CustomersPage() {
     if (!sortConfig) return 0
 
     const key = sortConfig.key as keyof typeof a
+    let aVal = a[key]
+    let bVal = b[key]
 
-    if (a[key] < b[key]) {
+    // Convert to numbers for invoice_count
+    if (key === "invoice_count") {
+      aVal = typeof aVal === "string" ? Number.parseInt(aVal as string) : aVal
+      bVal = typeof bVal === "string" ? Number.parseInt(bVal as string) : bVal
+    }
+
+    if (aVal < bVal) {
       return sortConfig.direction === "ascending" ? -1 : 1
     }
-    if (a[key] > b[key]) {
+    if (aVal > bVal) {
       return sortConfig.direction === "ascending" ? 1 : -1
     }
     return 0
@@ -121,8 +139,16 @@ export default function CustomersPage() {
 
   // Calculate stats
   const totalCustomers = customers.length
-  const totalInvoices = customers.reduce((sum, customer) => sum + customer.invoice_count, 0)
-  const activeCustomers = customers.filter((customer) => customer.invoice_count > 0).length
+  const totalInvoices = customers.reduce((sum, customer) => {
+    const invoiceCount =
+      typeof customer.invoice_count === "string" ? Number.parseInt(customer.invoice_count) : customer.invoice_count
+    return sum + invoiceCount
+  }, 0)
+  const activeCustomers = customers.filter((customer) => {
+    const invoiceCount =
+      typeof customer.invoice_count === "string" ? Number.parseInt(customer.invoice_count) : customer.invoice_count
+    return invoiceCount > 0
+  }).length
 
   if (loading) {
     return (
@@ -285,64 +311,71 @@ export default function CustomersPage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      sortedCustomers.map((customer, index) => (
-                        <motion.tr
-                          key={customer.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -20 }}
-                          transition={{ duration: 0.3, delay: index * 0.05 }}
-                          className="border-border/50 hover:bg-muted/50 transition-colors"
-                        >
-                          <TableCell className="font-medium">{customer.name}</TableCell>
-                          <TableCell className="text-cosmic-blue">{customer.email}</TableCell>
-                          <TableCell className="font-mono text-sm">{customer.phone}</TableCell>
-                          <TableCell className="text-right">
-                            <Badge
-                              variant={customer.invoice_count > 0 ? "default" : "secondary"}
-                              className={customer.invoice_count > 0 ? "text-cosmic-green" : ""}
-                            >
-                              {customer.invoice_count}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-cosmic-purple/10">
-                                  <span className="sr-only">Open menu</span>
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="glass-effect">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem className="hover:bg-cosmic-blue/10">
-                                  <Link href={`/dashboard/customers/${customer.id}`} className="flex items-center">
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Edit
-                                  </Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="hover:bg-cosmic-green/10">
-                                  <Link
-                                    href={`/dashboard/invoices?customer=${customer.id}`}
-                                    className="flex items-center"
+                      sortedCustomers.map((customer, index) => {
+                        const invoiceCount =
+                          typeof customer.invoice_count === "string"
+                            ? Number.parseInt(customer.invoice_count)
+                            : customer.invoice_count
+
+                        return (
+                          <motion.tr
+                            key={customer.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            transition={{ duration: 0.3, delay: index * 0.05 }}
+                            className="border-border/50 hover:bg-muted/50 transition-colors"
+                          >
+                            <TableCell className="font-medium">{customer.name}</TableCell>
+                            <TableCell className="text-cosmic-blue">{customer.email}</TableCell>
+                            <TableCell className="font-mono text-sm">{customer.phone}</TableCell>
+                            <TableCell className="text-right">
+                              <Badge
+                                variant={invoiceCount > 0 ? "default" : "secondary"}
+                                className={invoiceCount > 0 ? "text-cosmic-green" : ""}
+                              >
+                                {invoiceCount}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-cosmic-purple/10">
+                                    <span className="sr-only">Open menu</span>
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="glass-effect">
+                                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                  <DropdownMenuItem className="hover:bg-cosmic-blue/10">
+                                    <Link href={`/dashboard/customers/${customer.id}`} className="flex items-center">
+                                      <Edit className="mr-2 h-4 w-4" />
+                                      Edit
+                                    </Link>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="hover:bg-cosmic-green/10">
+                                    <Link
+                                      href={`/dashboard/invoices?customer=${customer.id}`}
+                                      className="flex items-center"
+                                    >
+                                      <FileText className="mr-2 h-4 w-4" />
+                                      View Invoices
+                                    </Link>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive hover:bg-cosmic-red/10"
+                                    onClick={() => handleDeleteCustomer(customer.id)}
                                   >
-                                    <FileText className="mr-2 h-4 w-4" />
-                                    View Invoices
-                                  </Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-destructive focus:text-destructive hover:bg-cosmic-red/10"
-                                  onClick={() => handleDeleteCustomer(customer.id)}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </motion.tr>
-                      ))
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </motion.tr>
+                        )
+                      })
                     )}
                   </AnimatePresence>
                 </TableBody>

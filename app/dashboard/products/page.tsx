@@ -23,8 +23,8 @@ type Product = {
   id: number
   name: string
   sku: string
-  price: number
-  stock: number
+  price: string | number
+  stock: string | number
   category: string
   description?: string
 }
@@ -49,7 +49,15 @@ export default function ProductsPage() {
       const response = await fetch("/api/products")
       if (response.ok) {
         const data = await response.json()
-        setProducts(data)
+        // Ensure price and stock are numbers
+        const normalizedData = data.map((product: any) => ({
+          ...product,
+          price: typeof product.price === "string" ? Number.parseFloat(product.price) : product.price,
+          stock: typeof product.stock === "string" ? Number.parseInt(product.stock) : product.stock,
+        }))
+        setProducts(normalizedData)
+      } else {
+        throw new Error("Failed to fetch products")
       }
     } catch (error) {
       console.error("Error fetching products:", error)
@@ -76,11 +84,19 @@ export default function ProductsPage() {
     if (!sortConfig) return 0
 
     const key = sortConfig.key as keyof typeof a
+    let aVal = a[key]
+    let bVal = b[key]
 
-    if (a[key] < b[key]) {
+    // Convert to numbers for price and stock
+    if (key === "price" || key === "stock") {
+      aVal = typeof aVal === "string" ? Number.parseFloat(aVal as string) : aVal
+      bVal = typeof bVal === "string" ? Number.parseFloat(bVal as string) : bVal
+    }
+
+    if (aVal < bVal) {
       return sortConfig.direction === "ascending" ? -1 : 1
     }
-    if (a[key] > b[key]) {
+    if (aVal > bVal) {
       return sortConfig.direction === "ascending" ? 1 : -1
     }
     return 0
@@ -120,10 +136,17 @@ export default function ProductsPage() {
     }
   }
 
-  // Calculate stats
+  // Calculate stats - ensure numbers
   const totalProducts = products.length
-  const totalValue = products.reduce((sum, product) => sum + product.price * product.stock, 0)
-  const lowStockProducts = products.filter((product) => product.stock < 10).length
+  const totalValue = products.reduce((sum, product) => {
+    const price = typeof product.price === "string" ? Number.parseFloat(product.price) : product.price
+    const stock = typeof product.stock === "string" ? Number.parseInt(product.stock) : product.stock
+    return sum + price * stock
+  }, 0)
+  const lowStockProducts = products.filter((product) => {
+    const stock = typeof product.stock === "string" ? Number.parseInt(product.stock) : product.stock
+    return stock < 10
+  }).length
 
   if (loading) {
     return (
@@ -301,64 +324,70 @@ export default function ProductsPage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      sortedProducts.map((product, index) => (
-                        <motion.tr
-                          key={product.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -20 }}
-                          transition={{ duration: 0.3, delay: index * 0.05 }}
-                          className="border-border/50 hover:bg-muted/50 transition-colors"
-                        >
-                          <TableCell className="font-medium">
-                            <Badge variant="outline" className="font-mono">
-                              {product.sku}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-medium">{product.name}</TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">{product.category}</Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-cosmic-green">
-                            ${product.price.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Badge
-                              variant={product.stock < 10 ? "destructive" : "default"}
-                              className={product.stock < 10 ? "text-cosmic-red" : "text-cosmic-blue"}
-                            >
-                              {product.stock}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-cosmic-purple/10">
-                                  <span className="sr-only">Open menu</span>
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="glass-effect">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem className="hover:bg-cosmic-blue/10">
-                                  <Link href={`/dashboard/products/${product.id}`} className="flex items-center">
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Edit
-                                  </Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-destructive focus:text-destructive hover:bg-cosmic-red/10"
-                                  onClick={() => handleDeleteProduct(product.id)}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </motion.tr>
-                      ))
+                      sortedProducts.map((product, index) => {
+                        const price =
+                          typeof product.price === "string" ? Number.parseFloat(product.price) : product.price
+                        const stock = typeof product.stock === "string" ? Number.parseInt(product.stock) : product.stock
+
+                        return (
+                          <motion.tr
+                            key={product.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            transition={{ duration: 0.3, delay: index * 0.05 }}
+                            className="border-border/50 hover:bg-muted/50 transition-colors"
+                          >
+                            <TableCell className="font-medium">
+                              <Badge variant="outline" className="font-mono">
+                                {product.sku}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="font-medium">{product.name}</TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">{product.category}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-semibold text-cosmic-green">
+                              ${price.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Badge
+                                variant={stock < 10 ? "destructive" : "default"}
+                                className={stock < 10 ? "text-cosmic-red" : "text-cosmic-blue"}
+                              >
+                                {stock}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-cosmic-purple/10">
+                                    <span className="sr-only">Open menu</span>
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="glass-effect">
+                                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                  <DropdownMenuItem className="hover:bg-cosmic-blue/10">
+                                    <Link href={`/dashboard/products/${product.id}`} className="flex items-center">
+                                      <Edit className="mr-2 h-4 w-4" />
+                                      Edit
+                                    </Link>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive hover:bg-cosmic-red/10"
+                                    onClick={() => handleDeleteProduct(product.id)}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </motion.tr>
+                        )
+                      })
                     )}
                   </AnimatePresence>
                 </TableBody>
