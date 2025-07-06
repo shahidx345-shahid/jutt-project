@@ -11,8 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
-import { ArrowLeft, Loader2, Plus, Trash2, FileText, Calculator, Users, Package } from "lucide-react"
+import { ArrowLeft, Loader2, Plus, Trash2, FileText, Calculator, Users, Package, AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import Link from "next/link"
 
 type Customer = {
@@ -29,12 +31,14 @@ type Product = {
   sku: string
   price: number
   stock: number
+  category: string
 }
 
 type InvoiceItem = {
   id: string
   product_id: number
   name: string
+  sku: string
   quantity: number
   unit_price: number
   total_price: number
@@ -44,6 +48,7 @@ export default function CreateInvoicePage() {
   const router = useRouter()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState("")
@@ -51,47 +56,96 @@ export default function CreateInvoicePage() {
   const [selectedProduct, setSelectedProduct] = useState("")
   const [quantity, setQuantity] = useState(1)
   const [taxRate, setTaxRate] = useState(10)
+  const [notes, setNotes] = useState("")
+  const [dueDate, setDueDate] = useState("")
+
+  // Initialize due date to 30 days from now
+  useEffect(() => {
+    const thirtyDaysFromNow = new Date()
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
+    setDueDate(thirtyDaysFromNow.toISOString().split("T")[0])
+  }, [])
 
   // Fetch customers and products
   useEffect(() => {
-    fetchCustomers()
-    fetchProducts()
+    fetchData()
   }, [])
 
-  const fetchCustomers = async () => {
+  const fetchData = async () => {
     try {
-      const response = await fetch("/api/customers")
-      if (response.ok) {
-        const data = await response.json()
-        setCustomers(data)
-      }
-    } catch (error) {
-      console.error("Error fetching customers:", error)
-    }
-  }
+      const [customersRes, productsRes] = await Promise.all([fetch("/api/customers"), fetch("/api/products")])
 
-  const fetchProducts = async () => {
-    try {
-      const response = await fetch("/api/products")
-      if (response.ok) {
-        const data = await response.json()
-        setProducts(data)
+      if (customersRes.ok) {
+        const customersData = await customersRes.json()
+        setCustomers(customersData)
+      } else {
+        throw new Error("Failed to fetch customers")
+      }
+
+      if (productsRes.ok) {
+        const productsData = await productsRes.json()
+        setProducts(productsData)
+      } else {
+        throw new Error("Failed to fetch products")
       }
     } catch (error) {
-      console.error("Error fetching products:", error)
+      console.error("Error fetching data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load customers and products",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
   }
 
   const addItem = () => {
-    if (!selectedProduct || quantity < 1) return
+    if (!selectedProduct || quantity < 1) {
+      toast({
+        title: "Invalid selection",
+        description: "Please select a product and enter a valid quantity",
+        variant: "destructive",
+      })
+      return
+    }
 
     const product = products.find((p) => p.id === Number.parseInt(selectedProduct))
-    if (!product) return
+    if (!product) {
+      toast({
+        title: "Product not found",
+        description: "Selected product could not be found",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Check if product already exists in items
+    const existingItem = invoiceItems.find((item) => item.product_id === product.id)
+    if (existingItem) {
+      toast({
+        title: "Product already added",
+        description: "This product is already in the invoice. Edit the quantity instead.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Check stock availability
+    if (quantity > product.stock) {
+      toast({
+        title: "Insufficient stock",
+        description: `Only ${product.stock} units available for ${product.name}`,
+        variant: "destructive",
+      })
+      return
+    }
 
     const newItem: InvoiceItem = {
       id: Date.now().toString(),
       product_id: product.id,
       name: product.name,
+      sku: product.sku,
       quantity: quantity,
       unit_price: product.price,
       total_price: product.price * quantity,
@@ -100,10 +154,48 @@ export default function CreateInvoicePage() {
     setInvoiceItems([...invoiceItems, newItem])
     setSelectedProduct("")
     setQuantity(1)
+
+    toast({
+      title: "Item added",
+      description: `${product.name} added to invoice`,
+    })
   }
 
   const removeItem = (id: string) => {
+    const item = invoiceItems.find((item) => item.id === id)
     setInvoiceItems(invoiceItems.filter((item) => item.id !== id))
+
+    if (item) {
+      toast({
+        title: "Item removed",
+        description: `${item.name} removed from invoice`,
+      })
+    }
+  }
+
+  const updateItemQuantity = (id: string, newQuantity: number) => {
+    if (newQuantity < 1) return
+
+    const item = invoiceItems.find((item) => item.id === id)
+    if (!item) return
+
+    const product = products.find((p) => p.id === item.product_id)
+    if (!product) return
+
+    if (newQuantity > product.stock) {
+      toast({
+        title: "Insufficient stock",
+        description: `Only ${product.stock} units available for ${product.name}`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    setInvoiceItems(
+      invoiceItems.map((item) =>
+        item.id === id ? { ...item, quantity: newQuantity, total_price: item.unit_price * newQuantity } : item,
+      ),
+    )
   }
 
   const calculateSubtotal = () => {
@@ -118,16 +210,14 @@ export default function CreateInvoicePage() {
     return calculateSubtotal() + calculateTax()
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
+  const validateForm = () => {
     if (!selectedCustomer) {
       toast({
         title: "Customer required",
         description: "Please select a customer for this invoice.",
         variant: "destructive",
       })
-      return
+      return false
     }
 
     if (invoiceItems.length === 0) {
@@ -136,8 +226,38 @@ export default function CreateInvoicePage() {
         description: "Please add at least one item to the invoice.",
         variant: "destructive",
       })
-      return
+      return false
     }
+
+    if (!dueDate) {
+      toast({
+        title: "Due date required",
+        description: "Please set a due date for this invoice.",
+        variant: "destructive",
+      })
+      return false
+    }
+
+    const dueDateObj = new Date(dueDate)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    if (dueDateObj < today) {
+      toast({
+        title: "Invalid due date",
+        description: "Due date cannot be in the past.",
+        variant: "destructive",
+      })
+      return false
+    }
+
+    return true
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!validateForm()) return
 
     setIsSubmitting(true)
 
@@ -145,12 +265,13 @@ export default function CreateInvoicePage() {
       const invoiceData = {
         customer_id: Number.parseInt(selectedCustomer),
         issue_date: new Date().toISOString().split("T")[0],
-        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0], // 30 days from now
+        due_date: dueDate,
         subtotal: calculateSubtotal(),
         tax_rate: taxRate,
         tax_amount: calculateTax(),
         total_amount: calculateTotal(),
         status: "pending",
+        notes: notes.trim() || null,
       }
 
       const items = invoiceItems.map((item) => ({
@@ -160,6 +281,8 @@ export default function CreateInvoicePage() {
         total_price: item.total_price,
       }))
 
+      console.log("Submitting invoice:", { invoice: invoiceData, items })
+
       const response = await fetch("/api/invoices", {
         method: "POST",
         headers: {
@@ -168,21 +291,25 @@ export default function CreateInvoicePage() {
         body: JSON.stringify({ invoice: invoiceData, items }),
       })
 
+      const responseData = await response.json()
+      console.log("Response:", responseData)
+
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to create invoice")
+        throw new Error(responseData.error || "Failed to create invoice")
       }
 
       toast({
-        title: "Invoice created",
-        description: "Invoice has been created successfully.",
+        title: "Invoice created successfully!",
+        description: `Invoice ${responseData.invoice_number || "created"} has been generated.`,
       })
 
+      // Redirect to invoices page
       router.push("/dashboard/invoices")
     } catch (error) {
+      console.error("Invoice creation error:", error)
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create invoice",
+        title: "Failed to create invoice",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
         variant: "destructive",
       })
     } finally {
@@ -191,6 +318,73 @@ export default function CreateInvoicePage() {
   }
 
   const selectedCustomerData = customers.find((c) => c.id === Number.parseInt(selectedCustomer))
+  const selectedProductData = products.find((p) => p.id === Number.parseInt(selectedProduct))
+
+  if (loading) {
+    return (
+      <div className="p-4 sm:p-6">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 bg-muted rounded w-1/3"></div>
+          <div className="grid gap-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-48 bg-muted rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show message if no customers or products
+  if (customers.length === 0 || products.length === 0) {
+    return (
+      <div className="p-4 sm:p-6 space-y-6">
+        <div className="flex items-center gap-4">
+          <Link href="/dashboard/invoices">
+            <Button variant="ghost" size="icon" className="hover:bg-cosmic-purple/10">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-cosmic bg-clip-text text-transparent">
+              Create Invoice
+            </h1>
+            <p className="text-muted-foreground mt-1">Generate a new invoice for your customer</p>
+          </div>
+        </div>
+
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {customers.length === 0 && products.length === 0
+              ? "You need to add customers and products before creating an invoice."
+              : customers.length === 0
+                ? "You need to add customers before creating an invoice."
+                : "You need to add products before creating an invoice."}
+          </AlertDescription>
+        </Alert>
+
+        <div className="flex gap-4">
+          {customers.length === 0 && (
+            <Link href="/dashboard/customers/create">
+              <Button>
+                <Users className="mr-2 h-4 w-4" />
+                Add Customer
+              </Button>
+            </Link>
+          )}
+          {products.length === 0 && (
+            <Link href="/dashboard/products/create">
+              <Button variant="outline">
+                <Package className="mr-2 h-4 w-4" />
+                Add Product
+              </Button>
+            </Link>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -227,20 +421,36 @@ export default function CreateInvoicePage() {
                 <CardDescription>Select the customer for this invoice</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="customer">Customer *</Label>
-                  <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-                    <SelectTrigger id="customer" className="glass-effect">
-                      <SelectValue placeholder="Select a customer" />
-                    </SelectTrigger>
-                    <SelectContent className="glass-effect">
-                      {customers.map((customer) => (
-                        <SelectItem key={customer.id} value={customer.id.toString()}>
-                          {customer.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="customer">Customer *</Label>
+                    <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+                      <SelectTrigger id="customer" className="glass-effect">
+                        <SelectValue placeholder="Select a customer" />
+                      </SelectTrigger>
+                      <SelectContent className="glass-effect">
+                        {customers.map((customer) => (
+                          <SelectItem key={customer.id} value={customer.id.toString()}>
+                            <div className="flex flex-col">
+                              <span className="font-medium">{customer.name}</span>
+                              <span className="text-xs text-muted-foreground">{customer.email}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="dueDate">Due Date *</Label>
+                    <Input
+                      id="dueDate"
+                      type="date"
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className="glass-effect"
+                      required
+                    />
+                  </div>
                 </div>
 
                 {selectedCustomerData && (
@@ -284,7 +494,12 @@ export default function CreateInvoicePage() {
                         {products.map((product) => (
                           <SelectItem key={product.id} value={product.id.toString()}>
                             <div className="flex items-center justify-between w-full">
-                              <span>{product.name}</span>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{product.name}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {product.sku} • Stock: {product.stock}
+                                </span>
+                              </div>
                               <Badge variant="outline" className="ml-2">
                                 ${product.price.toFixed(2)}
                               </Badge>
@@ -293,6 +508,9 @@ export default function CreateInvoicePage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {selectedProductData && (
+                      <p className="text-xs text-muted-foreground">Available: {selectedProductData.stock} units</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="quantity">Quantity</Label>
@@ -300,6 +518,7 @@ export default function CreateInvoicePage() {
                       id="quantity"
                       type="number"
                       min="1"
+                      max={selectedProductData?.stock || 999}
                       value={quantity}
                       onChange={(e) => setQuantity(Number.parseInt(e.target.value) || 1)}
                       className="glass-effect"
@@ -338,8 +557,21 @@ export default function CreateInvoicePage() {
                       ) : (
                         invoiceItems.map((item) => (
                           <TableRow key={item.id} className="hover:bg-muted/30">
-                            <TableCell className="font-medium">{item.name}</TableCell>
-                            <TableCell className="text-right">{item.quantity}</TableCell>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{item.name}</span>
+                                <span className="text-xs text-muted-foreground">{item.sku}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => updateItemQuantity(item.id, Number.parseInt(e.target.value) || 1)}
+                                className="w-20 h-8 text-right"
+                              />
+                            </TableCell>
                             <TableCell className="text-right text-cosmic-green font-semibold">
                               ${item.unit_price.toFixed(2)}
                             </TableCell>
@@ -406,6 +638,22 @@ export default function CreateInvoicePage() {
               </CardContent>
             </Card>
 
+            {/* Notes */}
+            <Card className="glass-effect hover-lift">
+              <CardHeader>
+                <CardTitle>Additional Notes</CardTitle>
+                <CardDescription>Add any additional information for this invoice</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Textarea
+                  placeholder="Enter any notes or special instructions..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="min-h-24 glass-effect resize-none"
+                />
+              </CardContent>
+            </Card>
+
             {/* Actions */}
             <Card className="glass-effect">
               <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6">
@@ -414,6 +662,7 @@ export default function CreateInvoicePage() {
                   type="button"
                   onClick={() => router.push("/dashboard/invoices")}
                   className="w-full sm:w-auto"
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </Button>
@@ -425,12 +674,12 @@ export default function CreateInvoicePage() {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
+                      Creating Invoice...
                     </>
                   ) : (
                     <>
                       <FileText className="mr-2 h-4 w-4" />
-                      Create Invoice
+                      Create Invoice ({invoiceItems.length} items - ${calculateTotal().toFixed(2)})
                     </>
                   )}
                 </Button>

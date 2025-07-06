@@ -36,7 +36,7 @@ export async function getProducts(userId: number) {
 export async function createProduct(userId: number, product: any) {
   const result = await sql`
     INSERT INTO products (user_id, name, sku, description, price, stock, category)
-    VALUES (${userId}, ${product.name}, ${product.sku}, ${product.description}, ${product.price}, ${product.stock}, ${product.category})
+    VALUES (${userId}, ${product.name}, ${product.sku}, ${product.description || ""}, ${product.price}, ${product.stock}, ${product.category})
     RETURNING *
   `
   return result[0]
@@ -45,7 +45,7 @@ export async function createProduct(userId: number, product: any) {
 export async function updateProduct(productId: number, userId: number, product: any) {
   const result = await sql`
     UPDATE products 
-    SET name = ${product.name}, sku = ${product.sku}, description = ${product.description}, 
+    SET name = ${product.name}, sku = ${product.sku}, description = ${product.description || ""}, 
         price = ${product.price}, stock = ${product.stock}, category = ${product.category},
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ${productId} AND user_id = ${userId}
@@ -67,7 +67,7 @@ export async function getCustomers(userId: number) {
     FROM customers c
     LEFT JOIN invoices i ON c.id = i.customer_id
     WHERE c.user_id = ${userId}
-    GROUP BY c.id
+    GROUP BY c.id, c.name, c.email, c.phone, c.address, c.user_id, c.created_at, c.updated_at
     ORDER BY c.created_at DESC
   `
   return result
@@ -111,26 +111,52 @@ export async function getInvoices(userId: number) {
 }
 
 export async function createInvoice(userId: number, invoice: any) {
-  // Generate invoice number
-  const invoiceNumber = `INV-${Date.now()}`
+  try {
+    // Generate invoice number
+    const invoiceCount = await sql`
+      SELECT COUNT(*) as count FROM invoices WHERE user_id = ${userId}
+    `
+    const count = invoiceCount[0]?.count || 0
+    const invoiceNumber = `INV-${String(Number(count) + 1).padStart(4, "0")}`
 
-  const result = await sql`
-    INSERT INTO invoices (user_id, customer_id, invoice_number, issue_date, due_date, 
-                         subtotal, tax_rate, tax_amount, total_amount, status, notes)
-    VALUES (${userId}, ${invoice.customer_id}, ${invoiceNumber}, ${invoice.issue_date}, 
-            ${invoice.due_date}, ${invoice.subtotal}, ${invoice.tax_rate}, 
-            ${invoice.tax_amount}, ${invoice.total_amount}, ${invoice.status}, ${invoice.notes || ""})
-    RETURNING *
-  `
-  return result[0]
+    console.log("Generated invoice number:", invoiceNumber)
+
+    const result = await sql`
+      INSERT INTO invoices (
+        user_id, customer_id, invoice_number, issue_date, due_date, 
+        subtotal, tax_rate, tax_amount, total_amount, status, notes
+      )
+      VALUES (
+        ${userId}, ${invoice.customer_id}, ${invoiceNumber}, ${invoice.issue_date}, 
+        ${invoice.due_date}, ${invoice.subtotal}, ${invoice.tax_rate}, 
+        ${invoice.tax_amount}, ${invoice.total_amount}, ${invoice.status}, ${invoice.notes}
+      )
+      RETURNING *
+    `
+
+    console.log("Invoice created successfully:", result[0])
+    return result[0]
+  } catch (error) {
+    console.error("Error creating invoice:", error)
+    throw error
+  }
 }
 
 export async function createInvoiceItems(invoiceId: number, items: any[]) {
-  for (const item of items) {
-    await sql`
-      INSERT INTO invoice_items (invoice_id, product_id, quantity, unit_price, total_price)
-      VALUES (${invoiceId}, ${item.product_id}, ${item.quantity}, ${item.unit_price}, ${item.total_price})
-    `
+  try {
+    console.log("Creating invoice items for invoice:", invoiceId, "Items:", items)
+
+    for (const item of items) {
+      await sql`
+        INSERT INTO invoice_items (invoice_id, product_id, quantity, unit_price, total_price)
+        VALUES (${invoiceId}, ${item.product_id}, ${item.quantity}, ${item.unit_price}, ${item.total_price})
+      `
+    }
+
+    console.log("Invoice items created successfully")
+  } catch (error) {
+    console.error("Error creating invoice items:", error)
+    throw error
   }
 }
 
@@ -142,6 +168,10 @@ export async function getInvoiceWithItems(invoiceId: number, userId: number) {
     JOIN customers c ON i.customer_id = c.id
     WHERE i.id = ${invoiceId} AND i.user_id = ${userId}
   `
+
+  if (invoice.length === 0) {
+    return null
+  }
 
   const items = await sql`
     SELECT ii.*, p.name as product_name, p.sku as product_sku
