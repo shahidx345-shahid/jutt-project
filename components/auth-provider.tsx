@@ -5,15 +5,15 @@ import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 
 type User = {
-  id: string
+  id: number
   name: string
   email: string
-} | null
+}
 
 type AuthContextType = {
-  user: User
-  login: (email: string, password: string) => Promise<void>
-  register: (name: string, email: string, password: string) => Promise<void>
+  user: User | null
+  login: (email: string, password: string) => Promise<boolean>
+  register: (name: string, email: string, password: string) => Promise<boolean>
   logout: () => void
   loading: boolean
 }
@@ -21,7 +21,7 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
@@ -32,25 +32,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setMounted(true)
   }, [])
 
+  // Check for existing session on mount
   useEffect(() => {
     if (!mounted) return
 
-    // Check if user is logged in by checking for stored user data
     const checkAuth = async () => {
       try {
-        if (typeof window !== "undefined") {
-          const storedUser = localStorage.getItem("user")
-          if (storedUser) {
-            const userData = JSON.parse(storedUser)
-            setUser(userData)
+        // Check localStorage for token
+        const token = localStorage.getItem("auth_token")
+        const userData = localStorage.getItem("user_data")
+
+        if (token && userData) {
+          try {
+            const parsedUser = JSON.parse(userData)
+            if (parsedUser && parsedUser.id && parsedUser.email) {
+              setUser(parsedUser)
+            } else {
+              // Invalid user data, clear storage
+              localStorage.removeItem("auth_token")
+              localStorage.removeItem("user_data")
+            }
+          } catch (error) {
+            console.error("Error parsing user data:", error)
+            localStorage.removeItem("auth_token")
+            localStorage.removeItem("user_data")
           }
         }
       } catch (error) {
-        console.error("Authentication error:", error)
-        // Clear invalid data
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("user")
-        }
+        console.error("Error checking auth:", error)
       } finally {
         setLoading(false)
       }
@@ -59,22 +68,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkAuth()
   }, [mounted])
 
-  // Protect routes - only run after mounting and loading is complete
+  // Handle route protection
   useEffect(() => {
     if (!mounted || loading) return
 
-    const publicRoutes = ["/", "/login", "/register", "/demo"]
-    const isPublicRoute = publicRoutes.some((route) => pathname === route)
+    const isAuthPage = pathname === "/login" || pathname === "/register" || pathname === "/"
+    const isDashboardPage = pathname?.startsWith("/dashboard")
 
-    if (!user && !isPublicRoute) {
+    if (!user && isDashboardPage) {
+      // User not authenticated, redirect to login
       router.push("/login")
-    } else if (user && (pathname === "/login" || pathname === "/register")) {
+    } else if (user && isAuthPage && pathname !== "/") {
+      // User authenticated but on auth page, redirect to dashboard
       router.push("/dashboard")
     }
-  }, [user, loading, pathname, router, mounted])
+  }, [user, pathname, router, loading, mounted])
 
-  const login = async (email: string, password: string) => {
-    setLoading(true)
+  const login = async (email: string, password: string): Promise<boolean> => {
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
@@ -86,26 +96,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || "Login failed")
-      }
+      if (response.ok && data.user) {
+        setUser(data.user)
 
-      if (typeof window !== "undefined") {
-        localStorage.setItem("user", JSON.stringify(data.user))
-      }
-      setUser(data.user)
+        // Store auth data safely
+        try {
+          localStorage.setItem("auth_token", data.token || "authenticated")
+          localStorage.setItem("user_data", JSON.stringify(data.user))
+        } catch (error) {
+          console.error("Error storing auth data:", error)
+        }
 
-      router.push("/dashboard")
+        return true
+      } else {
+        console.error("Login failed:", data.error)
+        return false
+      }
     } catch (error) {
       console.error("Login error:", error)
-      throw error
-    } finally {
-      setLoading(false)
+      return false
     }
   }
 
-  const register = async (name: string, email: string, password: string) => {
-    setLoading(true)
+  const register = async (name: string, email: string, password: string): Promise<boolean> => {
     try {
       const response = await fetch("/api/auth/register", {
         method: "POST",
@@ -117,51 +130,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || "Registration failed")
-      }
+      if (response.ok && data.user) {
+        setUser(data.user)
 
-      if (typeof window !== "undefined") {
-        localStorage.setItem("user", JSON.stringify(data.user))
-      }
-      setUser(data.user)
+        // Store auth data safely
+        try {
+          localStorage.setItem("auth_token", data.token || "authenticated")
+          localStorage.setItem("user_data", JSON.stringify(data.user))
+        } catch (error) {
+          console.error("Error storing auth data:", error)
+        }
 
-      router.push("/dashboard")
+        return true
+      } else {
+        console.error("Registration failed:", data.error)
+        return false
+      }
     } catch (error) {
       console.error("Registration error:", error)
-      throw error
-    } finally {
-      setLoading(false)
+      return false
     }
   }
 
-  const logout = async () => {
-    try {
-      await fetch("/api/auth/logout", { method: "POST" })
-    } catch (error) {
-      console.error("Logout error:", error)
-    }
-
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("user")
-    }
+  const logout = () => {
     setUser(null)
-    router.push("/")
+
+    // Clear auth data safely
+    try {
+      localStorage.removeItem("auth_token")
+      localStorage.removeItem("user_data")
+    } catch (error) {
+      console.error("Error clearing auth data:", error)
+    }
+
+    router.push("/login")
   }
 
-  // Don't render children until mounted to prevent hydration issues
+  // Don't render anything until mounted to prevent hydration issues
   if (!mounted) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    )
+    return null
   }
 
-  return <AuthContext.Provider value={{ user, login, register, logout, loading }}>{children}</AuthContext.Provider>
+  const value = {
+    user,
+    login,
+    register,
+    logout,
+    loading,
+  }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-export const useAuth = () => {
+export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider")
