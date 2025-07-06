@@ -1,0 +1,164 @@
+import { neon } from "@neondatabase/serverless"
+
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL environment variable is not set")
+}
+
+export const sql = neon(process.env.DATABASE_URL)
+
+// Database helper functions
+export async function getUser(email: string) {
+  const result = await sql`
+    SELECT id, name, email, password_hash 
+    FROM users 
+    WHERE email = ${email}
+  `
+  return result[0] || null
+}
+
+export async function createUser(name: string, email: string, passwordHash: string) {
+  const result = await sql`
+    INSERT INTO users (name, email, password_hash)
+    VALUES (${name}, ${email}, ${passwordHash})
+    RETURNING id, name, email
+  `
+  return result[0]
+}
+
+export async function getProducts(userId: number) {
+  return await sql`
+    SELECT * FROM products 
+    WHERE user_id = ${userId}
+    ORDER BY created_at DESC
+  `
+}
+
+export async function createProduct(userId: number, product: any) {
+  const result = await sql`
+    INSERT INTO products (user_id, name, sku, description, price, stock, category)
+    VALUES (${userId}, ${product.name}, ${product.sku}, ${product.description}, ${product.price}, ${product.stock}, ${product.category})
+    RETURNING *
+  `
+  return result[0]
+}
+
+export async function updateProduct(productId: number, userId: number, product: any) {
+  const result = await sql`
+    UPDATE products 
+    SET name = ${product.name}, sku = ${product.sku}, description = ${product.description}, 
+        price = ${product.price}, stock = ${product.stock}, category = ${product.category},
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${productId} AND user_id = ${userId}
+    RETURNING *
+  `
+  return result[0]
+}
+
+export async function deleteProduct(productId: number, userId: number) {
+  await sql`
+    DELETE FROM products 
+    WHERE id = ${productId} AND user_id = ${userId}
+  `
+}
+
+export async function getCustomers(userId: number) {
+  const result = await sql`
+    SELECT c.*, COUNT(i.id) as invoice_count
+    FROM customers c
+    LEFT JOIN invoices i ON c.id = i.customer_id
+    WHERE c.user_id = ${userId}
+    GROUP BY c.id
+    ORDER BY c.created_at DESC
+  `
+  return result
+}
+
+export async function createCustomer(userId: number, customer: any) {
+  const result = await sql`
+    INSERT INTO customers (user_id, name, email, phone, address)
+    VALUES (${userId}, ${customer.name}, ${customer.email}, ${customer.phone}, ${customer.address || ""})
+    RETURNING *
+  `
+  return result[0]
+}
+
+export async function updateCustomer(customerId: number, userId: number, customer: any) {
+  const result = await sql`
+    UPDATE customers 
+    SET name = ${customer.name}, email = ${customer.email}, phone = ${customer.phone}, 
+        address = ${customer.address || ""}, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ${customerId} AND user_id = ${userId}
+    RETURNING *
+  `
+  return result[0]
+}
+
+export async function deleteCustomer(customerId: number, userId: number) {
+  await sql`
+    DELETE FROM customers 
+    WHERE id = ${customerId} AND user_id = ${userId}
+  `
+}
+
+export async function getInvoices(userId: number) {
+  return await sql`
+    SELECT i.*, c.name as customer_name
+    FROM invoices i
+    JOIN customers c ON i.customer_id = c.id
+    WHERE i.user_id = ${userId}
+    ORDER BY i.created_at DESC
+  `
+}
+
+export async function createInvoice(userId: number, invoice: any) {
+  // Generate invoice number
+  const invoiceNumber = `INV-${Date.now()}`
+
+  const result = await sql`
+    INSERT INTO invoices (user_id, customer_id, invoice_number, issue_date, due_date, 
+                         subtotal, tax_rate, tax_amount, total_amount, status, notes)
+    VALUES (${userId}, ${invoice.customer_id}, ${invoiceNumber}, ${invoice.issue_date}, 
+            ${invoice.due_date}, ${invoice.subtotal}, ${invoice.tax_rate}, 
+            ${invoice.tax_amount}, ${invoice.total_amount}, ${invoice.status}, ${invoice.notes || ""})
+    RETURNING *
+  `
+  return result[0]
+}
+
+export async function createInvoiceItems(invoiceId: number, items: any[]) {
+  for (const item of items) {
+    await sql`
+      INSERT INTO invoice_items (invoice_id, product_id, quantity, unit_price, total_price)
+      VALUES (${invoiceId}, ${item.product_id}, ${item.quantity}, ${item.unit_price}, ${item.total_price})
+    `
+  }
+}
+
+export async function getInvoiceWithItems(invoiceId: number, userId: number) {
+  const invoice = await sql`
+    SELECT i.*, c.name as customer_name, c.email as customer_email, 
+           c.phone as customer_phone, c.address as customer_address
+    FROM invoices i
+    JOIN customers c ON i.customer_id = c.id
+    WHERE i.id = ${invoiceId} AND i.user_id = ${userId}
+  `
+
+  const items = await sql`
+    SELECT ii.*, p.name as product_name, p.sku as product_sku
+    FROM invoice_items ii
+    JOIN products p ON ii.product_id = p.id
+    WHERE ii.invoice_id = ${invoiceId}
+  `
+
+  return {
+    ...invoice[0],
+    items,
+  }
+}
+
+export async function deleteInvoice(invoiceId: number, userId: number) {
+  await sql`
+    DELETE FROM invoices 
+    WHERE id = ${invoiceId} AND user_id = ${userId}
+  `
+}

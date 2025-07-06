@@ -53,6 +53,15 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        cosmic: {
+          purple: "hsl(var(--cosmic-purple))",
+          blue: "hsl(var(--cosmic-blue))",
+          pink: "hsl(var(--cosmic-pink))",
+          orange: "hsl(var(--cosmic-orange))",
+          green: "hsl(var(--cosmic-green))",
+          yellow: "hsl(var(--cosmic-yellow))",
+          red: "hsl(var(--cosmic-red))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -74,13 +83,15 @@ const config = {
         },
         "pulse-glow": {
           "0%, 100%": {
-            boxShadow: "0 0 10px 2px rgba(124, 58, 237, 0.3)",
-            opacity: "0.8",
+            boxShadow: "0 0 20px hsl(var(--cosmic-purple) / 0.3)",
           },
           "50%": {
-            boxShadow: "0 0 20px 5px rgba(124, 58, 237, 0.5)",
-            opacity: "1",
+            boxShadow: "0 0 30px hsl(var(--cosmic-purple) / 0.6)",
           },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
         },
         "rotate-orbit": {
           "0%": { transform: "rotate(0deg)" },
@@ -92,7 +103,13 @@ const config = {
         "accordion-up": "accordion-up 0.2s ease-out",
         float: "float 6s ease-in-out infinite",
         "pulse-glow": "pulse-glow 3s ease-in-out infinite",
+        shimmer: "shimmer 2s infinite",
         "rotate-orbit": "rotate-orbit 20s linear infinite",
+      },
+      backgroundImage: {
+        "gradient-cosmic": "var(--gradient-cosmic)",
+        "gradient-nebula": "var(--gradient-nebula)",
+        "gradient-aurora": "var(--gradient-aurora)",
       },
     },
   },

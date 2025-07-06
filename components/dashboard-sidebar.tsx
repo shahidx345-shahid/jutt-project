@@ -6,7 +6,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { LayoutDashboard, Package, Users, FileText, LogOut, Menu, X } from "lucide-react"
+import { LayoutDashboard, Package, Users, FileText, Settings, LogOut, Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/components/auth-provider"
 import { cn } from "@/lib/utils"
@@ -37,7 +37,12 @@ const navItems: NavItem[] = [
     title: "Invoices",
     href: "/dashboard/invoices",
     icon: FileText,
-  }
+  },
+  {
+    title: "Settings",
+    href: "/dashboard/settings",
+    icon: Settings,
+  },
 ]
 
 export function DashboardSidebar() {

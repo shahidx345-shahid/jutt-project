@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
@@ -12,14 +11,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
-import { ArrowLeft, Loader2 } from "lucide-react"
+import { ArrowLeft, Loader2, Package, DollarSign, Hash } from "lucide-react"
 import Link from "next/link"
-import { useData } from "@/components/data-provider"
 
 export default function CreateProductPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { addProduct } = useData()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
@@ -39,7 +36,7 @@ export default function CreateProductPage() {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
 
@@ -49,22 +46,31 @@ export default function CreateProductPage() {
         throw new Error("Please fill in all required fields")
       }
 
-      // Add the product
-      addProduct({
-        name: formData.name,
-        sku: formData.sku,
-        category: formData.category,
-        price: Number.parseFloat(formData.price),
-        stock: Number.parseInt(formData.stock),
-        description: formData.description,
+      const response = await fetch("/api/products", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          sku: formData.sku,
+          category: formData.category,
+          price: Number.parseFloat(formData.price),
+          stock: Number.parseInt(formData.stock),
+          description: formData.description,
+        }),
       })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to create product")
+      }
 
       toast({
         title: "Product created",
         description: `${formData.name} has been added to your products.`,
       })
 
-      // Navigate back to products page
       router.push("/dashboard/products")
     } catch (error) {
       toast({
@@ -78,34 +84,44 @@ export default function CreateProductPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center mb-6">
+    <div className="p-4 sm:p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-4">
         <Link href="/dashboard/products">
-          <Button variant="ghost" size="icon" className="mr-4">
+          <Button variant="ghost" size="icon" className="hover:bg-cosmic-purple/10">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-          <h1 className="text-3xl font-bold tracking-tight">Add New Product</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-cosmic bg-clip-text text-transparent">
+            Add New Product
+          </h1>
           <p className="text-muted-foreground mt-1">Create a new product in your inventory</p>
         </motion.div>
       </div>
 
+      {/* Form */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
       >
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-6 md:grid-cols-2">
-            <Card className="border-primary/20 bg-background/80 backdrop-blur-sm md:col-span-2">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Product Information */}
+            <Card className="glass-effect hover-lift lg:col-span-2">
               <CardHeader>
-                <CardTitle>Product Information</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5 text-cosmic-blue" />
+                  Product Information
+                </CardTitle>
                 <CardDescription>Enter the basic details about your product</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Product Name</Label>
+                  <Label htmlFor="name" className="text-sm font-medium">
+                    Product Name *
+                  </Label>
                   <Input
                     id="name"
                     name="name"
@@ -113,11 +129,14 @@ export default function CreateProductPage() {
                     value={formData.name}
                     onChange={handleChange}
                     required
-                    className="bg-background/50"
+                    className="glass-effect"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="sku">SKU</Label>
+                  <Label htmlFor="sku" className="text-sm font-medium flex items-center gap-1">
+                    <Hash className="h-3 w-3" />
+                    SKU *
+                  </Label>
                   <Input
                     id="sku"
                     name="sku"
@@ -125,70 +144,90 @@ export default function CreateProductPage() {
                     value={formData.sku}
                     onChange={handleChange}
                     required
-                    className="bg-background/50"
+                    className="glass-effect font-mono"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
+                  <Label htmlFor="category" className="text-sm font-medium">
+                    Category *
+                  </Label>
                   <Select value={formData.category} onValueChange={(value) => handleSelectChange("category", value)}>
-                    <SelectTrigger id="category" className="bg-background/50">
+                    <SelectTrigger id="category" className="glass-effect">
                       <SelectValue placeholder="Select a category" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="glass-effect">
                       <SelectItem value="Planet Models">Planet Models</SelectItem>
                       <SelectItem value="Dwarf Planets">Dwarf Planets</SelectItem>
                       <SelectItem value="Moons">Moons</SelectItem>
                       <SelectItem value="Spacecraft">Spacecraft</SelectItem>
                       <SelectItem value="Collections">Collections</SelectItem>
+                      <SelectItem value="Accessories">Accessories</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="description">Description</Label>
+                  <Label htmlFor="description" className="text-sm font-medium">
+                    Description
+                  </Label>
                   <Textarea
                     id="description"
                     name="description"
                     placeholder="Enter product description..."
                     value={formData.description}
                     onChange={handleChange}
-                    className="min-h-32 bg-background/50"
+                    className="min-h-32 glass-effect resize-none"
                   />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-primary/20 bg-background/80 backdrop-blur-sm">
+            {/* Pricing */}
+            <Card className="glass-effect hover-lift">
               <CardHeader>
-                <CardTitle>Pricing</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5 text-cosmic-green" />
+                  Pricing
+                </CardTitle>
                 <CardDescription>Set the price for your product</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="price">Price ($)</Label>
-                  <Input
-                    id="price"
-                    name="price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0.00"
-                    value={formData.price}
-                    onChange={handleChange}
-                    required
-                    className="bg-background/50"
-                  />
+                  <Label htmlFor="price" className="text-sm font-medium">
+                    Price ($) *
+                  </Label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="price"
+                      name="price"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      value={formData.price}
+                      onChange={handleChange}
+                      required
+                      className="pl-10 glass-effect"
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-primary/20 bg-background/80 backdrop-blur-sm">
+            {/* Inventory */}
+            <Card className="glass-effect hover-lift">
               <CardHeader>
-                <CardTitle>Inventory</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5 text-cosmic-orange" />
+                  Inventory
+                </CardTitle>
                 <CardDescription>Manage your product stock</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="stock">Stock Quantity</Label>
+                  <Label htmlFor="stock" className="text-sm font-medium">
+                    Stock Quantity *
+                  </Label>
                   <Input
                     id="stock"
                     name="stock"
@@ -198,25 +237,34 @@ export default function CreateProductPage() {
                     value={formData.stock}
                     onChange={handleChange}
                     required
-                    className="bg-background/50"
+                    className="glass-effect"
                   />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-primary/20 bg-background/80 backdrop-blur-sm md:col-span-2">
-              <CardFooter className="flex justify-between pt-6">
-                <Button variant="outline" type="button" onClick={() => router.push("/dashboard/products")}>
+            {/* Actions */}
+            <Card className="glass-effect lg:col-span-2">
+              <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6">
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => router.push("/dashboard/products")}
+                  className="w-full sm:w-auto"
+                >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
+                <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto cosmic-glow">
                   {isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
+                      Creating...
                     </>
                   ) : (
-                    "Save Product"
+                    <>
+                      <Package className="mr-2 h-4 w-4" />
+                      Create Product
+                    </>
                   )}
                 </Button>
               </CardFooter>

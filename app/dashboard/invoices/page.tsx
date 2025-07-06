@@ -1,29 +1,75 @@
 "use client"
 
-import { useState } from "react"
-import { motion } from "framer-motion"
+import { useState, useEffect } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Search, ArrowUpDown, FileText, Trash2, Pencil } from "lucide-react"
-import { useData } from "@/components/data-provider"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Plus, Search, MoreHorizontal, Edit, Trash2, ArrowUpDown, FileText, DollarSign, Clock, Eye } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
+type Invoice = {
+  id: number
+  invoice_number: string
+  customer_name: string
+  customer_id: number
+  issue_date: string
+  due_date: string
+  total_amount: number
+  status: "pending" | "paid" | "overdue"
+  created_at: string
+}
+
 export default function InvoicesPage() {
-  const { invoices, deleteInvoice } = useData()
   const { toast } = useToast()
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [sortConfig, setSortConfig] = useState<{
     key: string
     direction: "ascending" | "descending"
   } | null>(null)
 
+  // Fetch invoices
+  useEffect(() => {
+    fetchInvoices()
+  }, [])
+
+  const fetchInvoices = async () => {
+    try {
+      const response = await fetch("/api/invoices")
+      if (response.ok) {
+        const data = await response.json()
+        setInvoices(data)
+      }
+    } catch (error) {
+      console.error("Error fetching invoices:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load invoices",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Filter invoices based on search term
   const filteredInvoices = invoices.filter(
     (invoice) =>
-      invoice.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.customer.toLowerCase().includes(searchTerm.toLowerCase()),
+      invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.customer_name.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
   // Sort invoices
@@ -51,12 +97,26 @@ export default function InvoicesPage() {
   }
 
   // Delete invoice
-  const handleDeleteInvoice = (id: string) => {
-    if (window.confirm("Are you sure you want to delete this invoice?")) {
-      deleteInvoice(id)
+  const handleDeleteInvoice = async (id: number) => {
+    try {
+      const response = await fetch(`/api/invoices/${id}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        setInvoices(invoices.filter((i) => i.id !== id))
+        toast({
+          title: "Invoice deleted",
+          description: "The invoice has been removed successfully.",
+        })
+      } else {
+        throw new Error("Failed to delete invoice")
+      }
+    } catch (error) {
       toast({
-        title: "Invoice deleted",
-        description: "The invoice has been removed successfully.",
+        title: "Error",
+        description: "Failed to delete invoice",
+        variant: "destructive",
       })
     }
   }
@@ -65,35 +125,41 @@ export default function InvoicesPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "paid":
-        return "bg-green-500/10 text-green-500 hover:bg-green-500/20"
+        return "bg-cosmic-green/10 text-cosmic-green border-cosmic-green/20"
       case "pending":
-        return "bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20"
+        return "bg-cosmic-yellow/10 text-cosmic-yellow border-cosmic-yellow/20"
       case "overdue":
-        return "bg-red-500/10 text-red-500 hover:bg-red-500/20"
+        return "bg-cosmic-red/10 text-cosmic-red border-cosmic-red/20"
       default:
-        return "bg-gray-500/10 text-gray-500 hover:bg-gray-500/20"
+        return "bg-muted text-muted-foreground"
     }
   }
 
-  // Format date
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    })
-  }
+  // Calculate stats
+  const totalInvoices = invoices.length
+  const totalAmount = invoices.reduce((sum, invoice) => sum + invoice.total_amount, 0)
+  const paidInvoices = invoices.filter((invoice) => invoice.status === "paid").length
+  const pendingInvoices = invoices.filter((invoice) => invoice.status === "pending").length
 
-  // Format currency
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount)
+  if (loading) {
+    return (
+      <div className="p-4 sm:p-6">
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 bg-muted rounded w-1/3"></div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-24 bg-muted rounded"></div>
+            ))}
+          </div>
+          <div className="h-96 bg-muted rounded"></div>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6 space-y-6">
+      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -101,147 +167,233 @@ export default function InvoicesPage() {
         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Invoices</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-cosmic bg-clip-text text-transparent">
+            Invoices
+          </h1>
           <p className="text-muted-foreground mt-1">Manage your customer invoices</p>
         </div>
         <Link href="/dashboard/invoices/create">
-          <Button>
+          <Button className="cosmic-glow hover-lift">
             <Plus className="mr-2 h-4 w-4" />
             Create Invoice
           </Button>
         </Link>
       </motion.div>
 
+      {/* Stats Cards */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="grid gap-4 md:grid-cols-4"
+      >
+        <Card className="glass-effect hover-lift">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Invoices</CardTitle>
+            <FileText className="h-4 w-4 text-cosmic-blue" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-cosmic-blue">{totalInvoices}</div>
+            <p className="text-xs text-muted-foreground">All invoices</p>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-effect hover-lift">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Amount</CardTitle>
+            <DollarSign className="h-4 w-4 text-cosmic-green" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-cosmic-green">${totalAmount.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Invoice value</p>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-effect hover-lift">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Paid</CardTitle>
+            <FileText className="h-4 w-4 text-cosmic-green" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-cosmic-green">{paidInvoices}</div>
+            <p className="text-xs text-muted-foreground">Completed</p>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-effect hover-lift">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending</CardTitle>
+            <Clock className="h-4 w-4 text-cosmic-yellow" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-cosmic-yellow">{pendingInvoices}</div>
+            <p className="text-xs text-muted-foreground">Awaiting payment</p>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Search */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
-        className="mt-6 flex gap-2"
+        className="flex gap-2"
       >
         <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
             placeholder="Search invoices..."
-            className="pl-8 bg-background/80"
+            className="pl-10 glass-effect"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
       </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.3 }}
-        className="mt-6 rounded-md border border-border/50 bg-background/80 backdrop-blur-sm"
-      >
-        <div className="relative w-full overflow-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[100px]">
-                  <Button
-                    variant="ghost"
-                    onClick={() => requestSort("id")}
-                    className="flex items-center gap-1 hover:bg-transparent"
-                  >
-                    Invoice
-                    <ArrowUpDown className="h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button
-                    variant="ghost"
-                    onClick={() => requestSort("customer")}
-                    className="flex items-center gap-1 hover:bg-transparent"
-                  >
-                    Customer
-                    <ArrowUpDown className="h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button
-                    variant="ghost"
-                    onClick={() => requestSort("date")}
-                    className="flex items-center gap-1 hover:bg-transparent"
-                  >
-                    Date
-                    <ArrowUpDown className="h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
-                  <Button
-                    variant="ghost"
-                    onClick={() => requestSort("status")}
-                    className="flex items-center gap-1 hover:bg-transparent"
-                  >
-                    Status
-                    <ArrowUpDown className="h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead className="text-right">
-                  <Button
-                    variant="ghost"
-                    onClick={() => requestSort("amount")}
-                    className="flex items-center gap-1 justify-end ml-auto hover:bg-transparent"
-                  >
-                    Amount
-                    <ArrowUpDown className="h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead className="w-[50px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedInvoices.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
-                    No invoices found.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                sortedInvoices.map((invoice) => (
-                  <TableRow key={invoice.id}>
-                    <TableCell className="font-medium">
-                      <Link href={`/dashboard/invoices/${invoice.id}`} className="hover:underline flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        {invoice.id}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{invoice.customer}</TableCell>
-                    <TableCell>{formatDate(invoice.date)}</TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusColor(invoice.status)}`}>
-                        {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">{formatCurrency(invoice.amount)}</TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-2">
-                        <Link href={`/dashboard/invoices/${invoice.id}/edit`}>
-                          <Button variant="ghost" size="icon">
-                            <Pencil className="h-4 w-4" />
-                            <span className="sr-only">Edit</span>
-                          </Button>
-                        </Link>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="text-red-500 hover:text-red-700"
-                          onClick={() => handleDeleteInvoice(invoice.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          <span className="sr-only">Delete</span>
-                        </Button>
-                      </div>
-                    </TableCell>
+      {/* Invoices Table */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.3 }}>
+        <Card className="glass-effect">
+          <CardHeader>
+            <CardTitle>Invoice Management</CardTitle>
+            <CardDescription>Track and manage your customer invoices</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="relative w-full overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border/50">
+                    <TableHead className="w-[120px]">
+                      <Button
+                        variant="ghost"
+                        onClick={() => requestSort("invoice_number")}
+                        className="flex items-center gap-1 hover:bg-transparent text-cosmic-purple"
+                      >
+                        Invoice #
+                        <ArrowUpDown className="h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead>
+                      <Button
+                        variant="ghost"
+                        onClick={() => requestSort("customer_name")}
+                        className="flex items-center gap-1 hover:bg-transparent text-cosmic-purple"
+                      >
+                        Customer
+                        <ArrowUpDown className="h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead>
+                      <Button
+                        variant="ghost"
+                        onClick={() => requestSort("issue_date")}
+                        className="flex items-center gap-1 hover:bg-transparent text-cosmic-purple"
+                      >
+                        Date
+                        <ArrowUpDown className="h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead>
+                      <Button
+                        variant="ghost"
+                        onClick={() => requestSort("status")}
+                        className="flex items-center gap-1 hover:bg-transparent text-cosmic-purple"
+                      >
+                        Status
+                        <ArrowUpDown className="h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <Button
+                        variant="ghost"
+                        onClick={() => requestSort("total_amount")}
+                        className="flex items-center gap-1 justify-end ml-auto hover:bg-transparent text-cosmic-purple"
+                      >
+                        Amount
+                        <ArrowUpDown className="h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                </TableHeader>
+                <TableBody>
+                  <AnimatePresence>
+                    {sortedInvoices.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="h-24 text-center">
+                          <div className="flex flex-col items-center gap-2">
+                            <FileText className="h-8 w-8 text-muted-foreground" />
+                            <p className="text-muted-foreground">No invoices found.</p>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      sortedInvoices.map((invoice, index) => (
+                        <motion.tr
+                          key={invoice.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -20 }}
+                          transition={{ duration: 0.3, delay: index * 0.05 }}
+                          className="border-border/50 hover:bg-muted/50 transition-colors"
+                        >
+                          <TableCell className="font-medium">
+                            <Badge variant="outline" className="font-mono">
+                              {invoice.invoice_number}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-medium">{invoice.customer_name}</TableCell>
+                          <TableCell className="text-sm">{new Date(invoice.issue_date).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            <Badge className={getStatusColor(invoice.status)}>
+                              {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-cosmic-green">
+                            ${invoice.total_amount.toFixed(2)}
+                          </TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-cosmic-purple/10">
+                                  <span className="sr-only">Open menu</span>
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="glass-effect">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuItem className="hover:bg-cosmic-blue/10">
+                                  <Link href={`/dashboard/invoices/${invoice.id}`} className="flex items-center">
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    View
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="hover:bg-cosmic-green/10">
+                                  <Link href={`/dashboard/invoices/${invoice.id}/edit`} className="flex items-center">
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Edit
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive hover:bg-cosmic-red/10"
+                                  onClick={() => handleDeleteInvoice(invoice.id)}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </motion.tr>
+                      ))
+                    )}
+                  </AnimatePresence>
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       </motion.div>
     </div>
   )

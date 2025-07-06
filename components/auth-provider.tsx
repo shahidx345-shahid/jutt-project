@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
@@ -20,22 +19,6 @@ type AuthContextType = {
   loading: boolean
 }
 
-// Mock users for demo purposes
-const MOCK_USERS = [
-  {
-    id: "user_1",
-    name: "Demo User",
-    email: "demo@example.com",
-    password: "password123",
-  },
-  {
-    id: "user_2",
-    name: "Admin User",
-    email: "admin@example.com",
-    password: "admin123",
-  },
-]
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -46,10 +29,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { toast } = useToast()
 
   useEffect(() => {
-    // Check if user is logged in
+    // Check if user is logged in by checking for stored user data
     const checkAuth = async () => {
       try {
-        // In a real app, you would verify the session/token with your backend
         const storedUser = localStorage.getItem("user")
         if (storedUser) {
           setUser(JSON.parse(storedUser))
@@ -81,21 +63,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     setLoading(true)
     try {
-      // Find user with matching email and password
-      const foundUser = MOCK_USERS.find((u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password)
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      })
 
-      if (!foundUser) {
-        throw new Error("Invalid email or password")
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Login failed")
       }
 
-      const userToStore = {
-        id: foundUser.id,
-        name: foundUser.name,
-        email: foundUser.email,
-      }
+      localStorage.setItem("user", JSON.stringify(data.user))
+      setUser(data.user)
 
-      localStorage.setItem("user", JSON.stringify(userToStore))
-      setUser(userToStore)
+      toast({
+        title: "Login successful",
+        description: "Welcome back to Cosmic Invoicer!",
+      })
+
       router.push("/dashboard")
     } catch (error) {
       console.error("Login error:", error)
@@ -113,24 +102,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = async (name: string, email: string, password: string) => {
     setLoading(true)
     try {
-      // Check if user with this email already exists
-      const existingUser = MOCK_USERS.find((u) => u.email.toLowerCase() === email.toLowerCase())
-      if (existingUser) {
-        throw new Error("User with this email already exists")
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name, email, password }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Registration failed")
       }
 
-      // In a real app, you would call your API to register
-      const newUser = {
-        id: `user_${Date.now()}`,
-        name,
-        email,
-      }
+      localStorage.setItem("user", JSON.stringify(data.user))
+      setUser(data.user)
 
-      // Add to mock users (this won't persist on page refresh in this demo)
-      MOCK_USERS.push({ ...newUser, password })
+      toast({
+        title: "Registration successful",
+        description: "Welcome to Cosmic Invoicer!",
+      })
 
-      localStorage.setItem("user", JSON.stringify(newUser))
-      setUser(newUser)
       router.push("/dashboard")
     } catch (error) {
       console.error("Registration error:", error)
@@ -145,7 +138,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" })
+    } catch (error) {
+      console.error("Logout error:", error)
+    }
+
     localStorage.removeItem("user")
     setUser(null)
     router.push("/")
