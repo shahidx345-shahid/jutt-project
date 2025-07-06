@@ -2,28 +2,36 @@ import { type NextRequest, NextResponse } from "next/server"
 import jwt from "jsonwebtoken"
 import { getUser } from "@/lib/db"
 
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
+
 export async function GET(request: NextRequest) {
   try {
-    const token = request.cookies.get("token")?.value
+    const authHeader = request.headers.get("authorization")
 
-    if (!token) {
-      return NextResponse.json({ error: "No token provided" }, { status: 401 })
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ message: "No token provided" }, { status: 401 })
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "fallback-secret") as any
-    const user = await getUser(decoded.email)
+    const token = authHeader.substring(7)
 
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 401 })
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as { userId: number; email: string }
+      const user = await getUser(decoded.email)
+
+      if (!user) {
+        return NextResponse.json({ message: "User not found" }, { status: 404 })
+      }
+
+      return NextResponse.json({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      })
+    } catch (jwtError) {
+      return NextResponse.json({ message: "Invalid token" }, { status: 401 })
     }
-
-    return NextResponse.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-    })
   } catch (error) {
-    console.error("Auth check error:", error)
-    return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    console.error("Auth me error:", error)
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
 }

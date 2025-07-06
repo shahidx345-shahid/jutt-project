@@ -1,50 +1,64 @@
 "use client"
 
-import type React from "react"
-import { createContext, useContext, useState, useEffect } from "react"
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 
-type User = {
+interface User {
   id: number
   name: string
   email: string
 }
 
-type AuthContextType = {
+interface AuthContextType {
   user: User | null
+  loading: boolean
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string) => Promise<void>
   logout: () => Promise<void>
-  loading: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const router = useRouter()
 
-  // Check if user is authenticated on mount
   useEffect(() => {
-    checkAuth()
+    setMounted(true)
   }, [])
+
+  useEffect(() => {
+    if (mounted) {
+      checkAuth()
+    }
+  }, [mounted])
 
   const checkAuth = async () => {
     try {
-      // Check if we have a token in cookies
+      const token = localStorage.getItem("token")
+      if (!token) {
+        setLoading(false)
+        return
+      }
+
       const response = await fetch("/api/auth/me", {
-        credentials: "include",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       })
 
       if (response.ok) {
         const userData = await response.json()
         setUser(userData)
       } else {
+        localStorage.removeItem("token")
         setUser(null)
       }
     } catch (error) {
       console.error("Auth check error:", error)
+      localStorage.removeItem("token")
       setUser(null)
     } finally {
       setLoading(false)
@@ -59,15 +73,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password }),
-        credentials: "include",
       })
 
-      const data = await response.json()
-
       if (!response.ok) {
-        throw new Error(data.error || "Login failed")
+        const error = await response.json()
+        throw new Error(error.message || "Login failed")
       }
 
+      const data = await response.json()
+      localStorage.setItem("token", data.token)
       setUser(data.user)
       router.push("/dashboard")
     } catch (error) {
@@ -84,15 +98,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ name, email, password }),
-        credentials: "include",
       })
 
-      const data = await response.json()
-
       if (!response.ok) {
-        throw new Error(data.error || "Registration failed")
+        const error = await response.json()
+        throw new Error(error.message || "Registration failed")
       }
 
+      const data = await response.json()
+      localStorage.setItem("token", data.token)
       setUser(data.user)
       router.push("/dashboard")
     } catch (error) {
@@ -105,32 +119,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
-        credentials: "include",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
       })
     } catch (error) {
       console.error("Logout error:", error)
     } finally {
+      localStorage.removeItem("token")
       setUser(null)
       router.push("/login")
     }
   }
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        login,
-        register,
-        logout,
-        loading,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  )
+  if (!mounted) {
+    return null
+  }
+
+  return <AuthContext.Provider value={{ user, loading, login, register, logout }}>{children}</AuthContext.Provider>
 }
 
-export const useAuth = () => {
+export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider")

@@ -2,11 +2,11 @@
 
 import type React from "react"
 
-import { useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { DashboardSidebar } from "@/components/dashboard-sidebar"
 import { useAuth } from "@/components/auth-provider"
+import { DashboardSidebar } from "@/components/dashboard-sidebar"
 import { LoadingAnimation } from "@/components/loading-animation"
+import { useRouter } from "next/navigation"
+import { useEffect } from "react"
 
 export default function DashboardLayout({
   children,
@@ -23,18 +23,27 @@ export default function DashboardLayout({
   }, [user, loading, router])
 
   if (loading) {
-    return <LoadingAnimation />
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingAnimation />
+      </div>
+    )
   }
 
   if (!user) {
-    return <LoadingAnimation />
+    return null
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="min-h-screen bg-background">
       <DashboardSidebar />
-      <div className="flex-1 md:ml-80">
-        <main className="h-full overflow-auto">{children}</main>
+      <div className="md:pl-64">
+        {/* Mobile top spacing */}
+        <div className="pt-16 md:pt-0">
+          <main className="py-6">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">{children}</div>
+          </main>
+        </div>
       </div>
     </div>
   )
