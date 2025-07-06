@@ -10,9 +10,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/components/auth-provider"
-import { Plus, Trash2, ArrowLeft } from "lucide-react"
+import { Plus, Trash2, ArrowLeft, Loader2 } from "lucide-react"
 
 // Helper functions for safe data conversion
 const safeNumber = (value: any): number => {
@@ -67,7 +67,7 @@ export default function CreateInvoicePage() {
     issue_date: new Date().toISOString().split("T")[0],
     due_date: "",
     tax_rate: 10,
-    status: "draft",
+    status: "pending",
     notes: "",
   })
 
@@ -94,6 +94,8 @@ export default function CreateInvoicePage() {
       if (customersRes.ok) {
         const customersData = await customersRes.json()
         setCustomers(customersData)
+      } else {
+        console.error("Failed to fetch customers:", await customersRes.text())
       }
 
       if (productsRes.ok) {
@@ -104,6 +106,8 @@ export default function CreateInvoicePage() {
           stock: safeInteger(product.stock),
         }))
         setProducts(normalizedProducts)
+      } else {
+        console.error("Failed to fetch products:", await productsRes.text())
       }
     } catch (error) {
       console.error("Error fetching data:", error)
@@ -189,6 +193,18 @@ export default function CreateInvoicePage() {
       return
     }
 
+    // Validate items
+    for (const item of items) {
+      if (!item.product_id || item.quantity <= 0 || item.unit_price < 0) {
+        toast({
+          title: "Error",
+          description: "Please ensure all items have valid product, quantity, and price.",
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
     setSubmitting(true)
 
     try {
@@ -197,7 +213,7 @@ export default function CreateInvoicePage() {
       const invoiceData = {
         customer_id: Number(formData.customer_id),
         issue_date: formData.issue_date,
-        due_date: formData.due_date,
+        due_date: formData.due_date || formData.issue_date,
         subtotal: subtotal,
         tax_rate: safeNumber(formData.tax_rate),
         tax_amount: taxAmount,
@@ -205,12 +221,14 @@ export default function CreateInvoicePage() {
         status: formData.status,
         notes: formData.notes,
         items: items.map((item) => ({
-          product_id: item.product_id,
+          product_id: Number(item.product_id),
           quantity: safeInteger(item.quantity),
           unit_price: safeNumber(item.unit_price),
           total_price: safeNumber(item.total_price),
         })),
       }
+
+      console.log("Submitting invoice data:", invoiceData)
 
       const response = await fetch("/api/invoices", {
         method: "POST",
@@ -220,9 +238,14 @@ export default function CreateInvoicePage() {
         body: JSON.stringify(invoiceData),
       })
 
+      const responseData = await response.json()
+
       if (!response.ok) {
-        throw new Error("Failed to create invoice")
+        console.error("Invoice creation failed:", responseData)
+        throw new Error(responseData.error || responseData.details || "Failed to create invoice")
       }
+
+      console.log("Invoice created successfully:", responseData)
 
       toast({
         title: "Success",
@@ -234,7 +257,7 @@ export default function CreateInvoicePage() {
       console.error("Error creating invoice:", error)
       toast({
         title: "Error",
-        description: "Failed to create invoice. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to create invoice. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -249,7 +272,10 @@ export default function CreateInvoicePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Loading...</span>
+        </div>
       </div>
     )
   }
@@ -266,6 +292,28 @@ export default function CreateInvoicePage() {
         <h1 className="text-3xl font-bold">Create Invoice</h1>
       </div>
 
+      {customers.length === 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p className="text-yellow-800">
+            You need to add customers before creating invoices.{" "}
+            <Button variant="link" className="p-0 h-auto" onClick={() => router.push("/dashboard/customers/create")}>
+              Add a customer first
+            </Button>
+          </p>
+        </div>
+      )}
+
+      {products.length === 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p className="text-yellow-800">
+            You need to add products before creating invoices.{" "}
+            <Button variant="link" className="p-0 h-auto" onClick={() => router.push("/dashboard/products/create")}>
+              Add a product first
+            </Button>
+          </p>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card>
           <CardHeader>
@@ -274,13 +322,16 @@ export default function CreateInvoicePage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="customer">Customer</Label>
+                <Label htmlFor="customer">Customer *</Label>
                 <Select
                   value={formData.customer_id}
                   onValueChange={(value) => setFormData({ ...formData, customer_id: value })}
+                  disabled={customers.length === 0}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a customer" />
+                    <SelectValue
+                      placeholder={customers.length === 0 ? "No customers available" : "Select a customer"}
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {customers.map((customer) => (
@@ -300,6 +351,7 @@ export default function CreateInvoicePage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
                     <SelectItem value="sent">Sent</SelectItem>
                     <SelectItem value="paid">Paid</SelectItem>
                     <SelectItem value="overdue">Overdue</SelectItem>
@@ -308,7 +360,7 @@ export default function CreateInvoicePage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="issue_date">Issue Date</Label>
+                <Label htmlFor="issue_date">Issue Date *</Label>
                 <Input
                   id="issue_date"
                   type="date"
@@ -325,7 +377,6 @@ export default function CreateInvoicePage() {
                   type="date"
                   value={formData.due_date}
                   onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                  required
                 />
               </div>
 
@@ -359,7 +410,7 @@ export default function CreateInvoicePage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Invoice Items</CardTitle>
-              <Button type="button" onClick={addItem} size="sm">
+              <Button type="button" onClick={addItem} size="sm" disabled={products.length === 0}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Item
               </Button>
@@ -368,14 +419,16 @@ export default function CreateInvoicePage() {
           <CardContent>
             {items.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">
-                No items added yet. Click "Add Item" to get started.
+                {products.length === 0
+                  ? "Add products first before creating invoice items."
+                  : 'No items added yet. Click "Add Item" to get started.'}
               </p>
             ) : (
               <div className="space-y-4">
                 {items.map((item, index) => (
                   <div key={index} className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 border rounded-lg">
                     <div className="md:col-span-2">
-                      <Label>Product</Label>
+                      <Label>Product *</Label>
                       <Select
                         value={item.product_id.toString()}
                         onValueChange={(value) => updateItem(index, "product_id", Number(value))}
@@ -394,7 +447,7 @@ export default function CreateInvoicePage() {
                     </div>
 
                     <div>
-                      <Label>Quantity</Label>
+                      <Label>Quantity *</Label>
                       <Input
                         type="number"
                         min="1"
@@ -404,7 +457,7 @@ export default function CreateInvoicePage() {
                     </div>
 
                     <div>
-                      <Label>Unit Price</Label>
+                      <Label>Unit Price *</Label>
                       <Input
                         type="number"
                         step="0.01"
@@ -464,8 +517,18 @@ export default function CreateInvoicePage() {
           <Button type="button" variant="outline" onClick={() => router.back()}>
             Cancel
           </Button>
-          <Button type="submit" disabled={submitting}>
-            {submitting ? "Creating..." : "Create Invoice"}
+          <Button
+            type="submit"
+            disabled={submitting || customers.length === 0 || products.length === 0 || items.length === 0}
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              "Create Invoice"
+            )}
           </Button>
         </div>
       </form>

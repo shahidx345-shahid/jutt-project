@@ -184,7 +184,7 @@ export async function deleteCustomer(customerId: number, userId: number) {
 export async function getInvoices(userId: number) {
   try {
     const result = await sql`
-      SELECT i.*, c.name as customer_name
+      SELECT i.*, c.name as customer_name, c.email as customer_email
       FROM invoices i
       JOIN customers c ON i.customer_id = c.id
       WHERE i.user_id = ${userId}
@@ -205,11 +205,14 @@ export async function getInvoices(userId: number) {
 
 export async function createInvoice(userId: number, invoice: any) {
   try {
+    // Generate invoice number
     const invoiceCount = await sql`
       SELECT COUNT(*) as count FROM invoices WHERE user_id = ${userId}
     `
-    const count = invoiceCount[0]?.count || 0
-    const invoiceNumber = `INV-${String(Number(count) + 1).padStart(4, "0")}`
+    const count = safeInteger(invoiceCount[0]?.count || 0)
+    const invoiceNumber = `INV-${String(count + 1).padStart(4, "0")}`
+
+    console.log("Generated invoice number:", invoiceNumber)
 
     const result = await sql`
       INSERT INTO invoices (
@@ -217,13 +220,22 @@ export async function createInvoice(userId: number, invoice: any) {
         subtotal, tax_rate, tax_amount, total_amount, status, notes
       )
       VALUES (
-        ${userId}, ${invoice.customer_id}, ${invoiceNumber}, ${invoice.issue_date}, 
-        ${invoice.due_date}, ${safeNumber(invoice.subtotal)}, ${safeNumber(invoice.tax_rate)}, 
-        ${safeNumber(invoice.tax_amount)}, ${safeNumber(invoice.total_amount)}, ${invoice.status}, ${invoice.notes}
+        ${userId}, 
+        ${invoice.customer_id}, 
+        ${invoiceNumber}, 
+        ${invoice.issue_date}, 
+        ${invoice.due_date}, 
+        ${safeNumber(invoice.subtotal)}, 
+        ${safeNumber(invoice.tax_rate)}, 
+        ${safeNumber(invoice.tax_amount)}, 
+        ${safeNumber(invoice.total_amount)}, 
+        ${invoice.status}, 
+        ${invoice.notes || ""}
       )
       RETURNING *
     `
 
+    console.log("Invoice created in database:", result[0])
     return result[0]
   } catch (error) {
     console.error("Error creating invoice:", error)
@@ -233,11 +245,21 @@ export async function createInvoice(userId: number, invoice: any) {
 
 export async function createInvoiceItems(invoiceId: number, items: any[]) {
   try {
+    console.log("Creating invoice items:", { invoiceId, items })
+
     for (const item of items) {
-      await sql`
+      const result = await sql`
         INSERT INTO invoice_items (invoice_id, product_id, quantity, unit_price, total_price)
-        VALUES (${invoiceId}, ${item.product_id}, ${safeInteger(item.quantity)}, ${safeNumber(item.unit_price)}, ${safeNumber(item.total_price)})
+        VALUES (
+          ${invoiceId}, 
+          ${safeInteger(item.product_id)}, 
+          ${safeInteger(item.quantity)}, 
+          ${safeNumber(item.unit_price)}, 
+          ${safeNumber(item.total_price)}
+        )
+        RETURNING *
       `
+      console.log("Created invoice item:", result[0])
     }
   } catch (error) {
     console.error("Error creating invoice items:", error)
